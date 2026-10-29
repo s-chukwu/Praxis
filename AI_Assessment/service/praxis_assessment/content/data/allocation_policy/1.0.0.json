@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "role_standard_version": "1.0.0",
+  "curriculum_version": "1.0.0",
+  "remediation_threshold": 3,
+  "mandatory_modules": ["M-ROLE"],
+  "safety_competency": "C4",
+  "safety_module": "M-SAFE",
+  "challenge_module": "M-CHALLENGE",
+  "remediation": {
+    "C1": ["M-VERIFY"],
+    "C2": ["M-COMM"],
+    "C3": ["M-TRIAGE"],
+    "C4": ["M-SAFE"],
+    "C5": ["M-VERIFY"],
+    "C6": ["M-TRIAGE"],
+    "B1": ["M-BOT-KB"],
+    "B2": ["M-BOT-HANDOFF"],
+    "B3": ["M-BOT-TEST"]
+  }
+}
