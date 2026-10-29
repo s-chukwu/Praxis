@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from praxis_assessment.content.models import (
     AllocationPolicy,
+    AssessorKeys,
     CurrentPins,
     Curriculum,
     RoleStandard,
@@ -66,6 +67,7 @@ class ContentRegistry:
     scenario_banks: Mapping[str, Versioned[ScenarioBank]]
     curricula: Mapping[str, Versioned[Curriculum]]
     allocation_policies: Mapping[str, Versioned[AllocationPolicy]]
+    assessor_keys: Mapping[str, Versioned[AssessorKeys]]
     current: CurrentPins
 
     def role_standard(self, version: str) -> Versioned[RoleStandard]:
@@ -96,6 +98,7 @@ def load_registry(root: Path) -> ContentRegistry:
         scenario_banks=_load_kind(root, "scenarios", ScenarioBank),
         curricula=_load_kind(root, "curriculum", Curriculum),
         allocation_policies=_load_kind(root, "allocation_policy", AllocationPolicy),
+        assessor_keys=_load_kind(root, "assessor_keys", AssessorKeys),
         current=current,
     )
     _check_references(registry)
@@ -119,6 +122,11 @@ def _check_references(reg: ContentRegistry) -> None:
             codes = reg.role_standards[rubric.content.role_standard_version].content.codes
             if unknown := set(scenario.competencies) - codes:
                 raise ContentError(f"scenarios {version}/{scenario.id} names unknown competencies {sorted(unknown)}")
+
+    if unpaired := sorted(reg.scenario_banks.keys() ^ reg.assessor_keys.keys()):
+        raise ContentError(f"scenario banks and assessor keys must come in pairs, unpaired versions {unpaired}")
+    for version, keys in reg.assessor_keys.items():
+        _check_keys(reg, version, keys.content)
 
     known_codes = frozenset().union(*(s.content.codes for s in reg.role_standards.values()))
     for version, curriculum in reg.curricula.items():
@@ -172,3 +180,18 @@ def _check_policy(reg: ContentRegistry, version: str, policy: AllocationPolicy) 
     # I always place the challenge last, so it must not carry prerequisites of its own.
     if courses[policy.challenge_module].prerequisites:
         raise ContentError(f"{where} challenge module {policy.challenge_module} must have no prerequisites")
+
+
+def _check_keys(reg: ContentRegistry, version: str, keys: AssessorKeys) -> None:
+    scenarios = {s.id: s for s in reg.scenario_banks[version].content.scenarios}
+    keyed = {k.scenario_id for k in keys.keys}
+    if keyed != scenarios.keys():
+        raise ContentError(
+            f"assessor_keys {version} must key every scenario exactly: "
+            f"unkeyed {sorted(scenarios.keys() - keyed)}, unknown {sorted(keyed - scenarios.keys())}"
+        )
+    for key in keys.keys:
+        allowed = reg.rubrics[scenarios[key.scenario_id].rubric_version].content.critical_event_types
+        for event in key.critical_events:
+            if event.event_type not in allowed:
+                raise ContentError(f"assessor_keys {version}/{key.scenario_id} uses unknown event {event.event_type}")

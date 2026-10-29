@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import heapq
+import re
+from fractions import Fraction
 from typing import Annotated, Literal
 
 from pydantic import Field, PrivateAttr, StringConstraints, model_validator
@@ -18,6 +20,9 @@ from praxis_assessment.schemas.common import (
 Track = Literal["operator", "builder"]
 Stage = Literal["baseline", "final", "practice", "security_regression"]
 CourseId = Annotated[str, StringConstraints(pattern=r"^M-[A-Z-]+$")]
+
+# Pilot value, not validated. Shipped twins share no three-word run at all, so this only trips on a near copy.
+MAX_TWIN_OVERLAP = Fraction(3, 10)
 
 
 class Competency(Frozen):
@@ -110,8 +115,9 @@ class ScenarioBank(Frozen):
                 raise ValueError(f"{s.id}: parallel form is missing or not reciprocal")
             if set(twin.competencies) != set(s.competencies) or twin.pair != s.pair:
                 raise ValueError(f"{s.id} and {twin.id} do not share a blueprint")
-            if twin.candidate_brief == s.candidate_brief:
-                raise ValueError(f"{s.id} and {twin.id} have identical briefs")
+            # Twins that read alike let a candidate carry a baseline answer into the final.
+            if brief_overlap(twin.candidate_brief, s.candidate_brief) > MAX_TWIN_OVERLAP:
+                raise ValueError(f"{s.id} and {twin.id} briefs overlap too much to be parallel forms")
         return self
 
     def scenario(self, scenario_id: str) -> Scenario:
@@ -122,6 +128,18 @@ class ScenarioBank(Frozen):
             f"scenario {scenario_id} is not in scenario bank {self.version}",
             details={"scenario_id": scenario_id, "scenario_version": self.version},
         )
+
+
+def brief_overlap(a: str, b: str) -> Fraction:
+    """Jaccard similarity of lower-cased three-word runs."""
+    runs_a, runs_b = _word_runs(a), _word_runs(b)
+    union = runs_a | runs_b
+    return Fraction(len(runs_a & runs_b), len(union)) if union else Fraction(1)
+
+
+def _word_runs(text: str) -> set[tuple[str, ...]]:
+    words = re.findall(r"\w+", text.lower())
+    return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
 
 
 class CriticalEvent(Frozen):

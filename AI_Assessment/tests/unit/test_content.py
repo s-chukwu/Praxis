@@ -38,6 +38,20 @@ def _drop_parallel_twin(data: dict) -> None:
     data["scenarios"] = [s for s in data["scenarios"] if s["id"] != "CS-01-B"]
 
 
+def _near_copy_twin(data: dict) -> None:
+    baseline = next(s for s in data["scenarios"] if s["id"] == "CS-01-A")
+    final = next(s for s in data["scenarios"] if s["id"] == "CS-01-B")
+    final["candidate_brief"] = baseline["candidate_brief"].replace("KivuCart", "DeskFlow")
+
+
+def _unkeyed_scenario(data: dict) -> None:
+    data["keys"] = [k for k in data["keys"] if k["scenario_id"] != "CS-02-B"]
+
+
+def _unknown_event(data: dict) -> None:
+    data["keys"][0]["critical_events"][0]["event_type"] = "rude_tone"
+
+
 def _cycle(data: dict) -> None:
     next(c for c in data["courses"] if c["id"] == "M-ROLE")["prerequisites"] = ["M-VERIFY"]
 
@@ -83,6 +97,9 @@ def _mismatched_blueprint(data: dict) -> None:
         ("scenarios/1.0.0.json", _drop_parallel_twin, "not reciprocal"),
         ("scenarios/1.0.0.json", _unbound_rubric, "missing rubric"),
         ("scenarios/1.0.0.json", _mismatched_blueprint, "blueprint"),
+        ("scenarios/1.0.0.json", _near_copy_twin, "overlap too much"),
+        ("assessor_keys/1.0.0.json", _unkeyed_scenario, r"unkeyed \['CS-02-B'\]"),
+        ("assessor_keys/1.0.0.json", _unknown_event, "unknown event rude_tone"),
         ("curriculum/1.0.0.json", _cycle, "cycle"),
         ("curriculum/1.0.0.json", _challenge_with_prerequisites, "must have no prerequisites"),
         ("allocation_policy/1.0.0.json", _remediation_gap, r"missing \['C6'\]"),
@@ -100,6 +117,12 @@ def test_file_name_must_match_declared_version(content_dir: Path) -> None:
     (content_dir / "rubric" / "0.1.0.json").rename(content_dir / "rubric" / "0.1.1.json")
     edit_json(content_dir / "current.json", lambda d: d.update(rubric="0.1.1"))
     with pytest.raises(ContentError, match="declares version 0.1.0"):
+        load_registry(content_dir)
+
+
+def test_scenario_bank_without_assessor_keys_refuses_to_load(content_dir: Path) -> None:
+    (content_dir / "assessor_keys" / "1.0.0.json").unlink()
+    with pytest.raises(ContentError, match="no assessor_keys content"):
         load_registry(content_dir)
 
 

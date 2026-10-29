@@ -119,6 +119,9 @@ def test_historical_attempt_keeps_its_rubric(content_dir: Path) -> None:
             s["rubric_version"] = "0.2.0"
 
     edit_json(bank, rebind)
+    keys = content_dir / "assessor_keys" / "1.1.0.json"
+    keys.write_text((content_dir / "assessor_keys" / "1.0.0.json").read_text())
+    edit_json(keys, lambda d: d.update(version="1.1.0"))
 
     client = TestClient(create_app(Settings(env="local", shared_secret=SECRET, content_dir=content_dir)))
 
