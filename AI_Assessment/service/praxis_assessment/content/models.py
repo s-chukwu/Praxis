@@ -164,6 +164,10 @@ class AssessorKeys(Frozen):
         require_unique([k.scenario_id for k in self.keys], "assessor key")
         return self
 
+    def key(self, scenario_id: str) -> AssessorKey:
+        # The registry guarantees one key per scenario, so a scenario that resolved always has one.
+        return next(k for k in self.keys if k.scenario_id == scenario_id)
+
 
 class Course(Frozen):
     id: CourseId

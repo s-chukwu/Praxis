@@ -3,14 +3,15 @@
 ## Boundary
 `Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing and calls no model in milestones 1–2. DO NOT expose port 8000 publicly or use live applicant data.
 
-## Implemented endpoints (milestones 1–2)
+## Implemented endpoints (milestones 1–3)
 The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_ENV=local`; it is disabled in production.
 
 | Method + path | Allowed actor | Purpose |
 |---|---|---|
 | `GET /health` | none (unsigned) | liveness |
 | `GET /internal/v1/catalog` | any signed actor | every loaded version of role standard, rubric, scenarios, curriculum; `current` pins for new attempts; SHA-256 per version. No assessor material. |
-| `POST /internal/v1/diagnostics/score` | `reviewer` only, and `reviewer_id` must equal the signed actor id | weighted rubric score, critical-safety veto, evidence check, proposed outcome |
+| `GET /internal/v1/scenarios/{id}/assessor-packet?version=X` | `reviewer` or `admin` | the scenario plus its grading key (checks, critical events). Never forward to a candidate. |
+| `POST /internal/v1/diagnostics/score` | `reviewer` only; `reviewer_id` must equal the signed actor id and differ from `candidate_id` | weighted rubric score, critical-safety veto, evidence check, proposed outcome |
 | `POST /internal/v1/learning-plans` | `reviewer` or `system` | skills gaps, safety gate and prerequisite-ordered modules from reviewed scores |
 
 The old `GET /catalog` is removed. `POST /assessment/plan` is replaced by `POST /internal/v1/learning-plans`, which takes reviewed scores only, never CV claims. The chatbot endpoint arrives in milestone 4.
@@ -26,7 +27,9 @@ X-Praxis-Signature: hex(HMAC-SHA256(AI_SERVICE_SHARED_SECRET, canonical))
 canonical = "v1\n" + timestamp + "\n" + METHOD + "\n" + path_with_raw_query + "\n" + actor + "\n" + hex(SHA-256(raw body))
 ```
 
-The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (not yet in `.env.example`; DevOps to add).
+The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (in `.env.example`; set a real value in your local `.env`).
+
+**Replay window.** A signed request stays valid for ±300 s and carries no nonce, so a captured request can be replayed inside that window. That is acceptable only because every endpoint today is a pure computation that stores nothing. Before any endpoint changes state, add a single-use nonce to the canonical string and a shared store to reject repeats.
 
 **Rotating the secret without downtime.** Python accepts `AI_SERVICE_SHARED_SECRET_PREVIOUS` alongside the current secret; Go always signs with the current one.
 1. Python: set `AI_SERVICE_SHARED_SECRET=<new>` and `AI_SERVICE_SHARED_SECRET_PREVIOUS=<old>`, deploy. Both now verify.
@@ -140,7 +143,7 @@ Rules (allocation policy 1.0.0):
 `candidate_profile`, `claimed_skill` (source, status, original evidence), `job_role` (version), `competency`, `assessment_form`, `attempt`, `artifact`, `review` (criterion evidence, reviewer), `critical_finding` (human adjudication), `course` (version), `assignment` (reason + prerequisites), `lesson_progress`, `bot_configuration` (version), `bot_test_run`, `consent` (scope/time/revocation), `referral` (vacancy+manual approval), `audit_event` (append-only).
 
 ## Audit invariants
-Store immutable role, scenario, rubric, curriculum and model/prompt version IDs, model output and reviewer score separately, and hash inputs. Score revisions need audit trail. Candidate cannot post reviewer score or employer eligibility. Never ship protected answer keys, policy overrides or internal prompts to browser. Train only on synthetic cases in pilot.
+Store immutable role, scenario, rubric, curriculum and model/prompt version IDs, model output and reviewer score separately, and hash inputs. Score revisions need audit trail. Candidate cannot post reviewer score or employer eligibility. Never ship protected answer keys, policy overrides or internal prompts to browser. Assessor keys live apart from scenarios (`content/data/assessor_keys/`), and the service refuses to start unless each scenario bank has exactly one matching key set. **Before real candidates**, move that directory out of git into a server-only store; the pilot keys are already public in `scenario.md`. Our Go backend must also stop a reviewer from being assigned their own attempt; Python only rejects `reviewer_id` = `candidate_id`. Train only on synthetic cases in pilot.
 
 ## Error semantics
 Every error has one shape: `{"error": {"code", "message", "request_id", "details"}}`.
@@ -148,7 +151,7 @@ Every error has one shape: `{"error": {"code", "message", "request_id", "details
 | Status | `code` | When |
 |---|---|---|
 | 401 | `unauthenticated` | missing, stale or wrong signature; malformed actor. Checked before the body schema. |
-| 403 | `forbidden` | actor role not allowed, or `reviewer_id` ≠ signed actor |
+| 403 | `forbidden` | actor role not allowed, `reviewer_id` ≠ signed actor, or `reviewer_id` = `candidate_id` |
 | 404 / 405 | `not_found` / `method_not_allowed` | unknown route |
 | 409 | `unsupported_version` | version not loaded, or scenario bound to a different rubric; `details.available` lists loaded versions |
 | 413 | `payload_too_large` | body over 256 KiB |
@@ -156,5 +159,7 @@ Every error has one shape: `{"error": {"code", "message", "request_id", "details
 | 422 | `invalid_input` | valid JSON that breaks a rubric/scenario rule (missing dimension, unknown event type, unexpected artifact, unknown scenario) |
 | 503 | `service_auth_not_configured` | shared secret not set |
 | 429 / 503 | reserved | quota and model outage, from milestone 5 |
+
+Every response carries `Cache-Control: no-store`; it may hold candidate evidence or assessor keys.
 
 Logs hold one JSON line per request (`request_id`, method, path, status, duration). Bodies are never logged.

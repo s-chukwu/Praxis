@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from praxis_assessment.content.models import (
     AllocationPolicy,
+    AssessorKey,
     CurrentPins,
     Curriculum,
     RoleStandard,
     Rubric,
+    Scenario,
     ScenarioBank,
 )
-from praxis_assessment.schemas.common import Frozen
+from praxis_assessment.schemas.common import ContentRef, Frozen
 
 
 class CatalogResponse(Frozen):
@@ -25,3 +27,12 @@ class CatalogResponse(Frozen):
     curricula: tuple[Curriculum, ...]
     allocation_policies: tuple[AllocationPolicy, ...]
     sha256: dict[str, dict[str, str]]
+
+
+class AssessorPacketResponse(Frozen):
+    """Reviewer-only: the scenario with its grading key. Never route this to a candidate."""
+
+    scenarios: ContentRef
+    assessor_keys: ContentRef
+    scenario: Scenario
+    key: AssessorKey

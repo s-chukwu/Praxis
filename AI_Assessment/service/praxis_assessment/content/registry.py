@@ -79,6 +79,9 @@ class ContentRegistry:
     def scenario_bank(self, version: str) -> Versioned[ScenarioBank]:
         return _lookup(self.scenario_banks, "scenarios", version)
 
+    def assessor_key_set(self, version: str) -> Versioned[AssessorKeys]:
+        return _lookup(self.assessor_keys, "assessor_keys", version)
+
     def curriculum(self, version: str) -> Versioned[Curriculum]:
         return _lookup(self.curricula, "curriculum", version)
 

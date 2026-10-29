@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Request
+from fastapi import APIRouter, Body, Depends, Query, Request
 
 from praxis_assessment import SERVICE_NAME, SERVICE_VERSION
 from praxis_assessment.api.auth import ALL_ROLES, Caller, require_caller
@@ -12,8 +12,8 @@ from praxis_assessment.content import ContentRegistry
 from praxis_assessment.domain.allocation import allocate
 from praxis_assessment.domain.scoring import score_attempt
 from praxis_assessment.errors import Forbidden, UnsupportedVersion
-from praxis_assessment.schemas.catalog import CatalogResponse
-from praxis_assessment.schemas.common import ContentRef
+from praxis_assessment.schemas.catalog import AssessorPacketResponse, CatalogResponse
+from praxis_assessment.schemas.common import ContentRef, ScenarioId, SemVer
 from praxis_assessment.schemas.learning_plan import LearningPlanRequest, LearningPlanResponse
 from praxis_assessment.schemas.scoring import ScoreRequest, ScoreResponse
 
@@ -55,6 +55,24 @@ async def catalog(
     )
 
 
+@internal_router.get("/scenarios/{scenario_id}/assessor-packet")
+async def assessor_packet(
+    scenario_id: ScenarioId,
+    version: Annotated[SemVer, Query()],
+    _caller: Annotated[Caller, Depends(require_caller("reviewer", "admin"))],
+    registry: Registry,
+) -> AssessorPacketResponse:
+    bank = registry.scenario_bank(version)
+    keys = registry.assessor_key_set(version)
+    scenario = bank.content.scenario(scenario_id)
+    return AssessorPacketResponse(
+        scenarios=ContentRef(version=version, sha256=bank.sha256),
+        assessor_keys=ContentRef(version=version, sha256=keys.sha256),
+        scenario=scenario,
+        key=keys.content.key(scenario.id),
+    )
+
+
 @internal_router.post("/diagnostics/score")
 async def score(
     body: Annotated[ScoreRequest, Body(openapi_examples=SCORE_EXAMPLES)],
@@ -64,6 +82,9 @@ async def score(
     # The signature proves our Go backend vouches for this reviewer; the body must not claim a different one.
     if caller.actor_id != body.reviewer_id:
         raise Forbidden("reviewer_id does not match the signed actor")
+    # Assignment rules belong to our Go backend; this only stops the one case I can see from here.
+    if body.reviewer_id == body.candidate_id:
+        raise Forbidden("a reviewer cannot score their own attempt")
 
     rubric = registry.rubric(body.rubric_version)
     bank = registry.scenario_bank(body.scenario_version)
