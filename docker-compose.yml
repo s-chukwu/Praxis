@@ -7,6 +7,7 @@ services:
       PORT: "8080"
       CORS_ALLOWED_ORIGIN: "http://localhost:3000"
       AI_SERVICE_URL: "http://ai:8000"
+      AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:-}"
     depends_on:
       - ai
     healthcheck:
@@ -20,6 +21,9 @@ services:
     ports:
       - "8000:8000"
     environment:
+      PRAXIS_ENV: "${PRAXIS_ENV:-local}"
+      AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:-}"
+      AI_SERVICE_SHARED_SECRET_PREVIOUS: "${AI_SERVICE_SHARED_SECRET_PREVIOUS:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
     healthcheck:
