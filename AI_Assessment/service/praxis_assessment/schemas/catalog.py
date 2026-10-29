@@ -3,6 +3,7 @@ from __future__ import annotations
 from praxis_assessment.content.models import (
     AllocationPolicy,
     AssessorKey,
+    AttemptWorkflow,
     CurrentPins,
     Curriculum,
     RoleStandard,
@@ -26,6 +27,7 @@ class CatalogResponse(Frozen):
     scenario_banks: tuple[ScenarioBank, ...]
     curricula: tuple[Curriculum, ...]
     allocation_policies: tuple[AllocationPolicy, ...]
+    attempt_workflows: tuple[AttemptWorkflow, ...]
     sha256: dict[str, dict[str, str]]
 
 

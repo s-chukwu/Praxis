@@ -3,12 +3,13 @@ from __future__ import annotations
 import heapq
 import re
 from fractions import Fraction
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from pydantic import Field, PrivateAttr, StringConstraints, model_validator
 
 from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.common import (
+    ActorRole,
     CompetencyCode,
     Frozen,
     ScenarioId,
@@ -243,6 +244,45 @@ class AllocationPolicy(Frozen):
     remediation: dict[CompetencyCode, tuple[CourseId, ...]]
 
 
+AttemptState = Literal["assigned", "in_progress", "submitted", "under_review", "review_pending", "reviewed", "voided"]
+
+
+class Transition(Frozen):
+    source: AttemptState
+    target: AttemptState
+    roles: tuple[ActorRole, ...] = Field(min_length=1)
+
+
+# Our Go backend enforces this table when it writes an attempt; I publish it so both sides read one source.
+class AttemptWorkflow(Frozen):
+    version: SemVer
+    initial: AttemptState
+    transitions: tuple[Transition, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _integrity(self) -> AttemptWorkflow:
+        require_unique([f"{t.source}->{t.target}" for t in self.transitions], "transition")
+        for t in self.transitions:
+            require_unique(t.roles, f"role on {t.source}->{t.target}")
+            if t.source == t.target:
+                raise ValueError(f"{t.source} cannot transition to itself")
+            if t.source == "voided":
+                raise ValueError("voided is final")
+        reached, frontier = {self.initial}, [self.initial]
+        while frontier:
+            state = frontier.pop()
+            for t in self.transitions:
+                if t.source == state and t.target not in reached:
+                    reached.add(t.target)
+                    frontier.append(t.target)
+        if unreachable := sorted(set(get_args(AttemptState)) - reached):
+            raise ValueError(f"states unreachable from {self.initial}: {unreachable}")
+        return self
+
+    def allows(self, source: str, target: str, role: str) -> bool:
+        return any(t.source == source and t.target == target and role in t.roles for t in self.transitions)
+
+
 class CurrentPins(Frozen):
     """Versions our Go backend should use for new attempts. Old attempts keep the versions they were created with."""
 
@@ -251,3 +291,4 @@ class CurrentPins(Frozen):
     scenarios: SemVer
     curriculum: SemVer
     allocation_policy: SemVer
+    attempt_workflow: SemVer

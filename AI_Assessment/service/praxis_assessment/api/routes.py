@@ -43,6 +43,7 @@ async def catalog(
         "scenarios": registry.scenario_banks,
         "curriculum": registry.curricula,
         "allocation_policy": registry.allocation_policies,
+        "attempt_workflow": registry.attempt_workflows,
     }
     return CatalogResponse(
         current=registry.current,
@@ -51,6 +52,7 @@ async def catalog(
         scenario_banks=tuple(v.content for v in registry.scenario_banks.values()),
         curricula=tuple(v.content for v in registry.curricula.values()),
         allocation_policies=tuple(v.content for v in registry.allocation_policies.values()),
+        attempt_workflows=tuple(v.content for v in registry.attempt_workflows.values()),
         sha256={kind: {version: v.sha256 for version, v in items.items()} for kind, items in kinds.items()},
     )
 

@@ -12,6 +12,7 @@ from pydantic import BaseModel, ValidationError
 from praxis_assessment.content.models import (
     AllocationPolicy,
     AssessorKeys,
+    AttemptWorkflow,
     CurrentPins,
     Curriculum,
     RoleStandard,
@@ -68,6 +69,7 @@ class ContentRegistry:
     curricula: Mapping[str, Versioned[Curriculum]]
     allocation_policies: Mapping[str, Versioned[AllocationPolicy]]
     assessor_keys: Mapping[str, Versioned[AssessorKeys]]
+    attempt_workflows: Mapping[str, Versioned[AttemptWorkflow]]
     current: CurrentPins
 
     def role_standard(self, version: str) -> Versioned[RoleStandard]:
@@ -81,6 +83,9 @@ class ContentRegistry:
 
     def assessor_key_set(self, version: str) -> Versioned[AssessorKeys]:
         return _lookup(self.assessor_keys, "assessor_keys", version)
+
+    def attempt_workflow(self, version: str) -> Versioned[AttemptWorkflow]:
+        return _lookup(self.attempt_workflows, "attempt_workflow", version)
 
     def curriculum(self, version: str) -> Versioned[Curriculum]:
         return _lookup(self.curricula, "curriculum", version)
@@ -102,6 +107,7 @@ def load_registry(root: Path) -> ContentRegistry:
         curricula=_load_kind(root, "curriculum", Curriculum),
         allocation_policies=_load_kind(root, "allocation_policy", AllocationPolicy),
         assessor_keys=_load_kind(root, "assessor_keys", AssessorKeys),
+        attempt_workflows=_load_kind(root, "attempt_workflow", AttemptWorkflow),
         current=current,
     )
     _check_references(registry)
@@ -147,6 +153,7 @@ def _check_references(reg: ContentRegistry) -> None:
         reg.scenario_bank(pins.scenarios)
         reg.curriculum(pins.curriculum)
         reg.allocation_policy(pins.allocation_policy)
+        reg.attempt_workflow(pins.attempt_workflow)
     except UnsupportedVersion as exc:
         raise ContentError(f"current.json pins a missing version: {exc.message}") from exc
 

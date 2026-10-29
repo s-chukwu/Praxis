@@ -9,10 +9,12 @@ The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_
 | Method + path | Allowed actor | Purpose |
 |---|---|---|
 | `GET /health` | none (unsigned) | liveness |
-| `GET /internal/v1/catalog` | any signed actor | every loaded version of role standard, rubric, scenarios, curriculum; `current` pins for new attempts; SHA-256 per version. No assessor material. |
+| `GET /internal/v1/catalog` | any signed actor | every loaded version of role standard, rubric, scenarios, curriculum, allocation policy and attempt workflow; `current` pins for new attempts; SHA-256 per version. No assessor material. |
 | `GET /internal/v1/scenarios/{id}/assessor-packet?version=X` | `reviewer` or `admin` | the scenario plus its grading key (checks, critical events). Never forward to a candidate. |
 | `POST /internal/v1/diagnostics/score` | `reviewer` only; `reviewer_id` must equal the signed actor id and differ from `candidate_id` | weighted rubric score, critical-safety veto, evidence check, proposed outcome |
 | `POST /internal/v1/learning-plans` | `reviewer` or `system` | skills gaps, safety gate and prerequisite-ordered modules from reviewed scores |
+
+**Attempt workflow.** `attempt_workflows` lists every allowed state change and who may make it (`reviewed` is locked except for an admin appeal; `voided` is final). Python publishes the table; our Go backend must enforce it on every attempt write, in the same transaction.
 
 The old `GET /catalog` is removed. `POST /assessment/plan` is replaced by `POST /internal/v1/learning-plans`, which takes reviewed scores only, never CV claims. The chatbot endpoint arrives in milestone 4.
 
