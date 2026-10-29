@@ -18,6 +18,12 @@ def test_shipped_content_loads_and_pins_resolve() -> None:
     assert registry.role_standard("1.0.0").content.tracks["operator"] == ("C1", "C2", "C3", "C4", "C5", "C6")
 
 
+def test_triage_keys_veto_a_missed_account_takeover() -> None:
+    keys = {k.scenario_id: k for k in load_registry(DEFAULT_CONTENT_DIR).assessor_keys["1.1.0"].content.keys}
+    for scenario_id in ("CS-03-A", "CS-03-B"):
+        assert [e.event_type for e in keys[scenario_id].critical_events] == ["missed_security_escalation"]
+
+
 def test_reformatting_a_file_does_not_change_its_hash(content_dir: Path) -> None:
     original = load_registry(content_dir).rubric("0.1.0").sha256
     edit_json(content_dir / "rubric" / "0.1.0.json", lambda _: None)  # rewrites with different whitespace
@@ -27,7 +33,7 @@ def test_reformatting_a_file_does_not_change_its_hash(content_dir: Path) -> None
 def test_unknown_version_is_an_explicit_error() -> None:
     with pytest.raises(UnsupportedVersion) as exc:
         load_registry(DEFAULT_CONTENT_DIR).rubric("9.9.9")
-    assert exc.value.details["available"] == ["0.1.0"]
+    assert exc.value.details["available"] == ["0.1.0", "0.2.0"]
 
 
 def _weights_off(data: dict) -> None:
@@ -36,6 +42,20 @@ def _weights_off(data: dict) -> None:
 
 def _drop_parallel_twin(data: dict) -> None:
     data["scenarios"] = [s for s in data["scenarios"] if s["id"] != "CS-01-B"]
+
+
+def _near_copy_twin(data: dict) -> None:
+    baseline = next(s for s in data["scenarios"] if s["id"] == "CS-01-A")
+    final = next(s for s in data["scenarios"] if s["id"] == "CS-01-B")
+    final["candidate_brief"] = baseline["candidate_brief"].replace("KivuCart", "DeskFlow")
+
+
+def _unkeyed_scenario(data: dict) -> None:
+    data["keys"] = [k for k in data["keys"] if k["scenario_id"] != "CS-02-B"]
+
+
+def _unknown_event(data: dict) -> None:
+    data["keys"][0]["critical_events"][0]["event_type"] = "rude_tone"
 
 
 def _cycle(data: dict) -> None:
@@ -83,6 +103,9 @@ def _mismatched_blueprint(data: dict) -> None:
         ("scenarios/1.0.0.json", _drop_parallel_twin, "not reciprocal"),
         ("scenarios/1.0.0.json", _unbound_rubric, "missing rubric"),
         ("scenarios/1.0.0.json", _mismatched_blueprint, "blueprint"),
+        ("scenarios/1.0.0.json", _near_copy_twin, "overlap too much"),
+        ("assessor_keys/1.0.0.json", _unkeyed_scenario, r"unkeyed \['CS-02-B'\]"),
+        ("assessor_keys/1.0.0.json", _unknown_event, "unknown event rude_tone"),
         ("curriculum/1.0.0.json", _cycle, "cycle"),
         ("curriculum/1.0.0.json", _challenge_with_prerequisites, "must have no prerequisites"),
         ("allocation_policy/1.0.0.json", _remediation_gap, r"missing \['C6'\]"),
@@ -100,6 +123,12 @@ def test_file_name_must_match_declared_version(content_dir: Path) -> None:
     (content_dir / "rubric" / "0.1.0.json").rename(content_dir / "rubric" / "0.1.1.json")
     edit_json(content_dir / "current.json", lambda d: d.update(rubric="0.1.1"))
     with pytest.raises(ContentError, match="declares version 0.1.0"):
+        load_registry(content_dir)
+
+
+def test_scenario_bank_without_assessor_keys_refuses_to_load(content_dir: Path) -> None:
+    (content_dir / "assessor_keys" / "1.0.0.json").unlink()
+    with pytest.raises(ContentError, match=r"unpaired versions \[.1.0.0.\]"):
         load_registry(content_dir)
 
 

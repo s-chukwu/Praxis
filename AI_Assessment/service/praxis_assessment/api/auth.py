@@ -5,15 +5,15 @@ import hmac
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Literal, get_args
+from typing import get_args
 from uuid import UUID
 
 from fastapi import Request
 
 from praxis_assessment.config import Settings
 from praxis_assessment.errors import AuthNotConfigured, Forbidden, Unauthenticated
+from praxis_assessment.schemas.common import ActorRole
 
-ActorRole = Literal["reviewer", "candidate", "admin", "system"]
 ALL_ROLES: tuple[ActorRole, ...] = get_args(ActorRole)
 
 TIMESTAMP_HEADER = "X-Praxis-Timestamp"

@@ -10,7 +10,6 @@ from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.scoring import (
     Artifact,
     CriticalFinding,
-    DimensionRating,
     DimensionScore,
     EvidenceIssue,
     OutcomeReason,
@@ -23,7 +22,7 @@ _WHITESPACE = re.compile(r"\s+")
 
 
 def score_attempt(rubric: Rubric, scenario: Scenario, request: ScoreRequest) -> ScoreResult:
-    _require_rubric_dimensions(rubric, request.dimensions)
+    require_rubric_dimensions(rubric, request.dimensions)
     _require_known_events(rubric, request.critical_findings)
     _require_expected_artifacts(scenario, request.artifacts)
 
@@ -39,7 +38,7 @@ def score_attempt(rubric: Rubric, scenario: Scenario, request: ScoreRequest) -> 
         )
         for d in rubric.dimensions
     )
-    weighted = Fraction(sum(d.weight_bp * d.score for d in dimensions), denominator)
+    weighted = weighted_score(rubric, {d.id: d.score for d in dimensions})
     threshold = Fraction(str(rubric.pilot_fixture_min_weighted_score))
 
     issues = _unverified_quotes(rubric, request)
@@ -72,6 +71,10 @@ def score_attempt(rubric: Rubric, scenario: Scenario, request: ScoreRequest) -> 
         score_source="human_review",
         requires_signoff=True,
     )
+
+
+def weighted_score(rubric: Rubric, scores: Mapping[str, int]) -> Fraction:
+    return Fraction(sum(d.weight_bp * scores[d.id] for d in rubric.dimensions), rubric.scale_max * 100)
 
 
 def _outcome(*, unresolved: bool, vetoed: bool, meets_threshold: bool) -> ProposedOutcome:
@@ -112,7 +115,7 @@ def _unverified_quotes(rubric: Rubric, request: ScoreRequest) -> tuple[EvidenceI
     return tuple(issues)
 
 
-def _require_rubric_dimensions(rubric: Rubric, ratings: Mapping[str, DimensionRating]) -> None:
+def require_rubric_dimensions(rubric: Rubric, ratings: Mapping[str, object]) -> None:
     expected = {d.id for d in rubric.dimensions}
     missing, unexpected = sorted(expected - ratings.keys()), sorted(ratings.keys() - expected)
     if missing or unexpected:
