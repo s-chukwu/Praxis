@@ -19,10 +19,10 @@ docker compose up --build
 
 Then:
 
-- http://localhost:3000 — frontend (shows backend health)
-- http://localhost:8080/health — backend
-- http://localhost:8000/health — AI service
-- http://localhost:8000/docs — AI service OpenAPI docs
+- http://localhost:3000 - frontend (shows backend health)
+- http://localhost:8080/health - backend
+- http://localhost:8000/health - AI service
+- http://localhost:8000/docs - AI service OpenAPI docs
 
 ## Development without Docker
 
@@ -39,7 +39,7 @@ cd frontend && npm install && npm run dev
 
 ## Docs
 
-- `docs/scope.md` — scope freeze
-- `AI_Assessment/docs/rubric.md` — assessment rubric
-- `AI_Assessment/docs/scenario.md` — scenario bank
-- `AI_Assessment/docs/integration_contract.md` — Go ↔ Python contract
+- `docs/scope.md` - scope freeze
+- `AI_Assessment/docs/rubric.md` - assessment rubric
+- `AI_Assessment/docs/scenario.md` - scenario bank
+- `AI_Assessment/docs/integration_contract.md` - Go ↔ Python contract
