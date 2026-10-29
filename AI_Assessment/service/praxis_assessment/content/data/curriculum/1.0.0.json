@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "courses": [
+    {"id": "M-ROLE", "title": "Job policies and scope of authority", "covers": ["C1", "C3"], "prerequisites": []},
+    {"id": "M-COMM", "title": "AI-assisted empathetic replies", "covers": ["C2"], "prerequisites": ["M-ROLE"]},
+    {"id": "M-SAFE", "title": "Data minimization, injection and privacy", "covers": ["C4"], "prerequisites": ["M-ROLE"]},
+    {"id": "M-VERIFY", "title": "Fact-checking generated text", "covers": ["C1", "C5"], "prerequisites": ["M-ROLE", "M-SAFE"]},
+    {"id": "M-TRIAGE", "title": "Support classification, priority and internal notes", "covers": ["C3", "C6"], "prerequisites": ["M-ROLE"]},
+    {"id": "M-BOT-KB", "title": "Build a bounded FAQ chatbot", "covers": ["B1"], "prerequisites": ["M-ROLE", "M-SAFE"]},
+    {"id": "M-BOT-HANDOFF", "title": "Human-in-the-loop support workflows", "covers": ["B2"], "prerequisites": ["M-BOT-KB"]},
+    {"id": "M-BOT-TEST", "title": "Test, review, iterate chatbot behavior", "covers": ["B3"], "prerequisites": ["M-BOT-HANDOFF"]},
+    {"id": "M-CHALLENGE", "title": "Final integrated practice challenge", "covers": ["C1", "C2", "C3", "C4", "C5", "C6"], "prerequisites": []}
+  ]
+}
