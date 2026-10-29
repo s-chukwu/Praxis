@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
+from praxis_assessment.api.examples import COMPARE_EXAMPLES
 from praxis_assessment.config import DEFAULT_CONTENT_DIR, Settings
 from praxis_assessment.content import load_registry
 from support import REVIEWER, REVIEWER_ID, SECRET, plan_payload, score_payload, signed_headers
@@ -132,6 +133,30 @@ def test_no_assessor_key_text_reaches_a_candidate(call) -> None:  # A20
 
 def test_error_responses_are_not_cacheable(client: TestClient) -> None:
     assert client.post(SCORE, json=score_payload()).headers["Cache-Control"] == "no-store"
+
+
+COMPARE = "/internal/v1/diagnostics/compare"
+
+
+@pytest.mark.parametrize("actor", [f"candidate:{uuid.uuid4()}", f"admin:{uuid.uuid4()}"])
+def test_only_reviewers_and_system_may_compare(call, actor: str) -> None:
+    assert call("POST", COMPARE, COMPARE_EXAMPLES["improved"]["value"], actor=actor).status_code == 403
+
+
+def test_compare_across_rubric_versions_is_409(call) -> None:  # A18, through the real route
+    payload = COMPARE_EXAMPLES["improved"]["value"]
+    payload = payload | {"final": payload["final"] | {"scenario_version": "1.0.0", "rubric_version": "0.1.0"}}
+    response = call("POST", COMPARE, payload, actor="system")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "not_comparable"
+
+
+def test_compare_refuses_an_unreviewed_attempt(call) -> None:
+    payload = COMPARE_EXAMPLES["improved"]["value"]
+    payload = payload | {"final": payload["final"] | {"state": "under_review"}}
+    response = call("POST", COMPARE, payload, actor="system")
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["state"] == "under_review"
 
 
 NEW_SECRET = b"rotated-secret-also-at-least-32-bytes-long"

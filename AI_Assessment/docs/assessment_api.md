@@ -12,6 +12,7 @@ The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_
 | `GET /internal/v1/catalog` | any signed actor | every loaded version of role standard, rubric, scenarios, curriculum, allocation policy and attempt workflow; `current` pins for new attempts; SHA-256 per version. No assessor material. |
 | `GET /internal/v1/scenarios/{id}/assessor-packet?version=X` | `reviewer` or `admin` | the scenario plus its grading key (checks, critical events). Never forward to a candidate. |
 | `POST /internal/v1/diagnostics/score` | `reviewer` only; `reviewer_id` must equal the signed actor id and differ from `candidate_id` | weighted rubric score, critical-safety veto, evidence check, proposed outcome |
+| `POST /internal/v1/diagnostics/compare` | `reviewer` or `system` | per-dimension change from a reviewed baseline to its reviewed parallel final form; flags any regression for a human |
 | `POST /internal/v1/learning-plans` | `reviewer` or `system` | skills gaps, safety gate and prerequisite-ordered modules from reviewed scores |
 
 **Attempt workflow.** `attempt_workflows` lists every allowed state change and who may make it (`reviewed` is locked except for an admin appeal; `voided` is final). Python publishes the table; our Go backend must enforce it on every attempt write, in the same transaction.
@@ -84,7 +85,25 @@ Response 200:
 
 `proposed_outcome` precedence: any pending critical finding or unverified quote → `review_pending`; else any confirmed critical finding → `needs_practice` (veto, whatever the score); else `weighted_score >= pilot_threshold` → `evidence_verified`, otherwise `needs_practice`. It is a proposal for the reviewer to sign, not a decision.
 
-Retries (both POST endpoints): they are pure functions with no side effects, so retrying the same body returns the same result. Suggested Go client: 2 s timeout, at most 2 retries on connection errors or 5xx, never on 4xx. Duplicate finalized reviews are prevented by Go and the database unique index, not here.
+Retries (all POST endpoints): they are pure functions with no side effects, so retrying the same body returns the same result. Suggested Go client: 2 s timeout, at most 2 retries on connection errors or 5xx, never on 4xx. Duplicate finalized reviews are prevented by Go and the database unique index, not here.
+
+### POST /internal/v1/diagnostics/compare
+Send both reviewed attempts with the dimension scores the reviewer signed:
+
+```json
+{
+  "request_id": "uuid", "candidate_id": "uuid",
+  "baseline": {"attempt_id": "uuid", "scenario_id": "CS-01-A", "scenario_version": "1.1.0", "rubric_version": "0.2.0",
+               "state": "reviewed", "dimensions": {"accuracy": 3, "judgment": 3, "safety": 4, "communication": 3}},
+  "final":    {"attempt_id": "uuid", "scenario_id": "CS-01-B", "scenario_version": "1.1.0", "rubric_version": "0.2.0",
+               "state": "reviewed", "dimensions": {"accuracy": 3, "judgment": 4, "safety": 2, "communication": 3}}
+}
+```
+
+The response gives each dimension's `baseline`, `final`, `delta` and `direction` (`improved`/`unchanged`/`regressed`), both weighted scores, `weighted_delta`, `regressed_dimensions` and `requires_human_review` (true on any regression). Rules:
+- `final.scenario_id` must be the baseline's parallel form, baseline stage first. The security pair (CS-04) never compares. Otherwise 422.
+- Both attempts must be `reviewed` and scored on the same scenario bank and rubric, otherwise 409 `not_comparable`. After a rubric change, a reviewer re-scores the baseline under the new rubric first.
+- Every rubric dimension is required; a missing one is 422, never a zero.
 
 ### POST /internal/v1/learning-plans
 Request (unknown fields, including `claimed_skills`, are rejected):
@@ -155,6 +174,7 @@ Every error has one shape: `{"error": {"code", "message", "request_id", "details
 | 401 | `unauthenticated` | missing, stale or wrong signature; malformed actor. Checked before the body schema. |
 | 403 | `forbidden` | actor role not allowed, `reviewer_id` ≠ signed actor, or `reviewer_id` = `candidate_id` |
 | 404 / 405 | `not_found` / `method_not_allowed` | unknown route |
+| 409 | `not_comparable` | compare attempts that are not both `reviewed`, or were scored on different scenario/rubric versions |
 | 409 | `unsupported_version` | version not loaded, or scenario bound to a different rubric; `details.available` lists loaded versions |
 | 413 | `payload_too_large` | body over 256 KiB |
 | 422 | `invalid_request` | schema failure; `details.errors` gives `loc`, `msg`, `type` and never echoes input values |

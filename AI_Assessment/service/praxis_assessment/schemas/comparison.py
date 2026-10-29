@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import Field
 
 from praxis_assessment.content.models import AttemptState
-from praxis_assessment.schemas.common import Frozen, Rating, ScenarioId, SemVer, Slug
+from praxis_assessment.schemas.common import ContentRef, Frozen, Rating, ScenarioId, SemVer, Slug
 
 
 class ReviewedAttempt(Frozen):
@@ -40,3 +40,13 @@ class Comparison(Frozen):
     weighted_delta: float
     regressed_dimensions: tuple[str, ...]
     requires_human_review: bool
+
+
+class CompareResponse(Frozen):
+    request_id: UUID
+    candidate_id: UUID
+    baseline_attempt_id: UUID
+    final_attempt_id: UUID
+    rubric: ContentRef
+    scenarios: ContentRef
+    result: Comparison

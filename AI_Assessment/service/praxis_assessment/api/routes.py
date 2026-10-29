@@ -7,13 +7,16 @@ from fastapi import APIRouter, Body, Depends, Query, Request
 from praxis_assessment import SERVICE_NAME, SERVICE_VERSION
 from praxis_assessment.api.auth import ALL_ROLES, Caller, require_caller
 from praxis_assessment.api.errors import ERROR_RESPONSES
-from praxis_assessment.api.examples import PLAN_EXAMPLES, SCORE_EXAMPLES
+from praxis_assessment.api.examples import COMPARE_EXAMPLES, PLAN_EXAMPLES, SCORE_EXAMPLES
 from praxis_assessment.content import ContentRegistry
+from praxis_assessment.content.models import Scenario, ScenarioBank
 from praxis_assessment.domain.allocation import allocate
+from praxis_assessment.domain.comparison import compare_attempts
 from praxis_assessment.domain.scoring import score_attempt
 from praxis_assessment.errors import Forbidden, UnsupportedVersion
 from praxis_assessment.schemas.catalog import AssessorPacketResponse, CatalogResponse
 from praxis_assessment.schemas.common import ContentRef, ScenarioId, SemVer
+from praxis_assessment.schemas.comparison import CompareRequest, CompareResponse
 from praxis_assessment.schemas.learning_plan import LearningPlanRequest, LearningPlanResponse
 from praxis_assessment.schemas.scoring import ScoreRequest, ScoreResponse
 
@@ -90,12 +93,7 @@ async def score(
 
     rubric = registry.rubric(body.rubric_version)
     bank = registry.scenario_bank(body.scenario_version)
-    scenario = bank.content.scenario(body.scenario_id)
-    if scenario.rubric_version != body.rubric_version:
-        raise UnsupportedVersion(
-            f"scenario {scenario.id} is bound to rubric {scenario.rubric_version}",
-            details={"requested": body.rubric_version, "bound": scenario.rubric_version},
-        )
+    scenario = _bound_scenario(bank.content, body.scenario_id, body.rubric_version)
 
     return ScoreResponse(
         request_id=body.request_id,
@@ -106,6 +104,38 @@ async def score(
         scenarios=ContentRef(version=bank.content.version, sha256=bank.sha256),
         result=score_attempt(rubric.content, scenario, body),
     )
+
+
+@internal_router.post("/diagnostics/compare")
+async def compare(
+    body: Annotated[CompareRequest, Body(openapi_examples=COMPARE_EXAMPLES)],
+    _caller: Annotated[Caller, Depends(require_caller("reviewer", "system"))],
+    registry: Registry,
+) -> CompareResponse:
+    # Both attempts must share these versions; compare_attempts refuses them otherwise.
+    rubric = registry.rubric(body.baseline.rubric_version)
+    bank = registry.scenario_bank(body.baseline.scenario_version)
+    baseline = _bound_scenario(bank.content, body.baseline.scenario_id, rubric.content.version)
+    final = _bound_scenario(bank.content, body.final.scenario_id, rubric.content.version)
+    return CompareResponse(
+        request_id=body.request_id,
+        candidate_id=body.candidate_id,
+        baseline_attempt_id=body.baseline.attempt_id,
+        final_attempt_id=body.final.attempt_id,
+        rubric=ContentRef(version=rubric.content.version, sha256=rubric.sha256),
+        scenarios=ContentRef(version=bank.content.version, sha256=bank.sha256),
+        result=compare_attempts(rubric.content, baseline, final, body),
+    )
+
+
+def _bound_scenario(bank: ScenarioBank, scenario_id: str, rubric_version: str) -> Scenario:
+    scenario = bank.scenario(scenario_id)
+    if scenario.rubric_version != rubric_version:
+        raise UnsupportedVersion(
+            f"scenario {scenario.id} is bound to rubric {scenario.rubric_version}",
+            details={"requested": rubric_version, "bound": scenario.rubric_version},
+        )
+    return scenario
 
 
 @internal_router.post("/learning-plans")
