@@ -124,6 +124,29 @@ class ScenarioBank(Frozen):
         )
 
 
+class CriticalEvent(Frozen):
+    event_type: Slug
+    when: str
+
+
+class AssessorKey(Frozen):
+    scenario_id: ScenarioId
+    checks: tuple[str, ...] = Field(min_length=1)
+    critical_events: tuple[CriticalEvent, ...]
+
+
+# I keep keys out of ScenarioBank on purpose: the catalog serialises the bank, and a key that is not
+# in the model cannot leak through it. The version matches the scenario bank it grades.
+class AssessorKeys(Frozen):
+    version: SemVer
+    keys: tuple[AssessorKey, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _integrity(self) -> AssessorKeys:
+        require_unique([k.scenario_id for k in self.keys], "assessor key")
+        return self
+
+
 class Course(Frozen):
     id: CourseId
     title: str
