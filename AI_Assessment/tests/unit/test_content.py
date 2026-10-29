@@ -18,6 +18,12 @@ def test_shipped_content_loads_and_pins_resolve() -> None:
     assert registry.role_standard("1.0.0").content.tracks["operator"] == ("C1", "C2", "C3", "C4", "C5", "C6")
 
 
+def test_triage_keys_veto_a_missed_account_takeover() -> None:
+    keys = {k.scenario_id: k for k in load_registry(DEFAULT_CONTENT_DIR).assessor_keys["1.1.0"].content.keys}
+    for scenario_id in ("CS-03-A", "CS-03-B"):
+        assert [e.event_type for e in keys[scenario_id].critical_events] == ["missed_security_escalation"]
+
+
 def test_reformatting_a_file_does_not_change_its_hash(content_dir: Path) -> None:
     original = load_registry(content_dir).rubric("0.1.0").sha256
     edit_json(content_dir / "rubric" / "0.1.0.json", lambda _: None)  # rewrites with different whitespace
@@ -27,7 +33,7 @@ def test_reformatting_a_file_does_not_change_its_hash(content_dir: Path) -> None
 def test_unknown_version_is_an_explicit_error() -> None:
     with pytest.raises(UnsupportedVersion) as exc:
         load_registry(DEFAULT_CONTENT_DIR).rubric("9.9.9")
-    assert exc.value.details["available"] == ["0.1.0"]
+    assert exc.value.details["available"] == ["0.1.0", "0.2.0"]
 
 
 def _weights_off(data: dict) -> None:
@@ -122,7 +128,7 @@ def test_file_name_must_match_declared_version(content_dir: Path) -> None:
 
 def test_scenario_bank_without_assessor_keys_refuses_to_load(content_dir: Path) -> None:
     (content_dir / "assessor_keys" / "1.0.0.json").unlink()
-    with pytest.raises(ContentError, match="no assessor_keys content"):
+    with pytest.raises(ContentError, match=r"unpaired versions \[.1.0.0.\]"):
         load_registry(content_dir)
 
 
