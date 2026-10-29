@@ -25,7 +25,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: echo "Python ruff + pytest go here"
+      - name: Install dependencies
+        if: hashFiles('AI_Assessment/pyproject.toml') != ''
+        run: pip install -r AI_Assessment/service/requirements-dev.txt
+      - name: Lint
+        if: hashFiles('AI_Assessment/pyproject.toml') != ''
+        working-directory: AI_Assessment
+        run: ruff check .
+      - name: Test
+        if: hashFiles('AI_Assessment/pyproject.toml') != ''
+        working-directory: AI_Assessment
+        run: pytest
 
   web:
     name: web
