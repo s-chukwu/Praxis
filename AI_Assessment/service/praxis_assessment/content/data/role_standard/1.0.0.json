@@ -1,0 +1,20 @@
+{
+  "id": "CS-AI-01",
+  "version": "1.0.0",
+  "title": "AI-assisted customer support operator",
+  "competencies": [
+    {"code": "C1", "name": "Fact checking and comprehension", "critical_when": null},
+    {"code": "C2", "name": "Communication", "critical_when": null},
+    {"code": "C3", "name": "Workflow and escalation", "critical_when": "unauthorized action"},
+    {"code": "C4", "name": "Privacy and AI safety", "critical_when": "always"},
+    {"code": "C5", "name": "AI output verification", "critical_when": "material deception"},
+    {"code": "C6", "name": "Triage and documentation", "critical_when": "security compromise deprioritized"},
+    {"code": "B1", "name": "Chatbot knowledge configuration", "critical_when": null},
+    {"code": "B2", "name": "Handoff and escalation", "critical_when": "always"},
+    {"code": "B3", "name": "Chatbot testing and trade-off analysis", "critical_when": null}
+  ],
+  "tracks": {
+    "operator": ["C1", "C2", "C3", "C4", "C5", "C6"],
+    "builder": ["C1", "C2", "C3", "C4", "C5", "C6", "B1", "B2", "B3"]
+  }
+}
