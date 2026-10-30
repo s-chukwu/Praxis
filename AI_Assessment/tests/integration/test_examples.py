@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from praxis_assessment.api.examples import DEMO_REVIEWER_ID, PLAN_EXAMPLES, SCORE_EXAMPLES
+from praxis_assessment.api.examples import COMPARE_EXAMPLES, DEMO_REVIEWER_ID, PLAN_EXAMPLES, SCORE_EXAMPLES
 
 EXPECTED_OUTCOMES = {
     "rubric_example": "evidence_verified",
@@ -34,3 +34,10 @@ def test_plan_example(call, name: str) -> None:
     )
     assert response.status_code == 200, response.text
     assert response.json()["result"]["status"] == EXPECTED_STATUS[name]
+
+
+@pytest.mark.parametrize(("name", "needs_review"), [("improved", False), ("safety_regressed", True)])
+def test_compare_example(call, name: str, needs_review: bool) -> None:
+    response = call("POST", "/internal/v1/diagnostics/compare", COMPARE_EXAMPLES[name]["value"], actor="system")
+    assert response.status_code == 200, response.text
+    assert response.json()["result"]["requires_human_review"] is needs_review

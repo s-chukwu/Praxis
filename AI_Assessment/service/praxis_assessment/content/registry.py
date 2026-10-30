@@ -11,6 +11,8 @@ from pydantic import BaseModel, ValidationError
 
 from praxis_assessment.content.models import (
     AllocationPolicy,
+    AssessorKeys,
+    AttemptWorkflow,
     CurrentPins,
     Curriculum,
     RoleStandard,
@@ -66,6 +68,8 @@ class ContentRegistry:
     scenario_banks: Mapping[str, Versioned[ScenarioBank]]
     curricula: Mapping[str, Versioned[Curriculum]]
     allocation_policies: Mapping[str, Versioned[AllocationPolicy]]
+    assessor_keys: Mapping[str, Versioned[AssessorKeys]]
+    attempt_workflows: Mapping[str, Versioned[AttemptWorkflow]]
     current: CurrentPins
 
     def role_standard(self, version: str) -> Versioned[RoleStandard]:
@@ -76,6 +80,12 @@ class ContentRegistry:
 
     def scenario_bank(self, version: str) -> Versioned[ScenarioBank]:
         return _lookup(self.scenario_banks, "scenarios", version)
+
+    def assessor_key_set(self, version: str) -> Versioned[AssessorKeys]:
+        return _lookup(self.assessor_keys, "assessor_keys", version)
+
+    def attempt_workflow(self, version: str) -> Versioned[AttemptWorkflow]:
+        return _lookup(self.attempt_workflows, "attempt_workflow", version)
 
     def curriculum(self, version: str) -> Versioned[Curriculum]:
         return _lookup(self.curricula, "curriculum", version)
@@ -96,6 +106,8 @@ def load_registry(root: Path) -> ContentRegistry:
         scenario_banks=_load_kind(root, "scenarios", ScenarioBank),
         curricula=_load_kind(root, "curriculum", Curriculum),
         allocation_policies=_load_kind(root, "allocation_policy", AllocationPolicy),
+        assessor_keys=_load_kind(root, "assessor_keys", AssessorKeys),
+        attempt_workflows=_load_kind(root, "attempt_workflow", AttemptWorkflow),
         current=current,
     )
     _check_references(registry)
@@ -120,6 +132,11 @@ def _check_references(reg: ContentRegistry) -> None:
             if unknown := set(scenario.competencies) - codes:
                 raise ContentError(f"scenarios {version}/{scenario.id} names unknown competencies {sorted(unknown)}")
 
+    if unpaired := sorted(reg.scenario_banks.keys() ^ reg.assessor_keys.keys()):
+        raise ContentError(f"scenario banks and assessor keys must come in pairs, unpaired versions {unpaired}")
+    for version, keys in reg.assessor_keys.items():
+        _check_keys(reg, version, keys.content)
+
     known_codes = frozenset().union(*(s.content.codes for s in reg.role_standards.values()))
     for version, curriculum in reg.curricula.items():
         for course in curriculum.content.courses:
@@ -136,6 +153,7 @@ def _check_references(reg: ContentRegistry) -> None:
         reg.scenario_bank(pins.scenarios)
         reg.curriculum(pins.curriculum)
         reg.allocation_policy(pins.allocation_policy)
+        reg.attempt_workflow(pins.attempt_workflow)
     except UnsupportedVersion as exc:
         raise ContentError(f"current.json pins a missing version: {exc.message}") from exc
 
@@ -172,3 +190,18 @@ def _check_policy(reg: ContentRegistry, version: str, policy: AllocationPolicy) 
     # I always place the challenge last, so it must not carry prerequisites of its own.
     if courses[policy.challenge_module].prerequisites:
         raise ContentError(f"{where} challenge module {policy.challenge_module} must have no prerequisites")
+
+
+def _check_keys(reg: ContentRegistry, version: str, keys: AssessorKeys) -> None:
+    scenarios = {s.id: s for s in reg.scenario_banks[version].content.scenarios}
+    keyed = {k.scenario_id for k in keys.keys}
+    if keyed != scenarios.keys():
+        raise ContentError(
+            f"assessor_keys {version} must key every scenario exactly: "
+            f"unkeyed {sorted(scenarios.keys() - keyed)}, unknown {sorted(keyed - scenarios.keys())}"
+        )
+    for key in keys.keys:
+        allowed = reg.rubrics[scenarios[key.scenario_id].rubric_version].content.critical_event_types
+        for event in key.critical_events:
+            if event.event_type not in allowed:
+                raise ContentError(f"assessor_keys {version}/{key.scenario_id} uses unknown event {event.event_type}")

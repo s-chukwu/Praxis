@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "initial": "assigned",
+  "transitions": [
+    {"source": "assigned", "target": "in_progress", "roles": ["candidate"]},
+    {"source": "in_progress", "target": "submitted", "roles": ["candidate", "system"]},
+    {"source": "submitted", "target": "under_review", "roles": ["reviewer"]},
+    {"source": "under_review", "target": "review_pending", "roles": ["reviewer"]},
+    {"source": "review_pending", "target": "under_review", "roles": ["reviewer"]},
+    {"source": "under_review", "target": "reviewed", "roles": ["reviewer"]},
+    {"source": "reviewed", "target": "under_review", "roles": ["admin"]},
+    {"source": "assigned", "target": "voided", "roles": ["admin"]},
+    {"source": "in_progress", "target": "voided", "roles": ["admin"]},
+    {"source": "submitted", "target": "voided", "roles": ["admin"]},
+    {"source": "under_review", "target": "voided", "roles": ["admin"]},
+    {"source": "review_pending", "target": "voided", "roles": ["admin"]}
+  ]
+}
