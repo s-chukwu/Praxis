@@ -2,7 +2,7 @@
 
 This page describes the Supabase (Postgres) schema built by migrations 001 to 004 in `supabase/migrations`. Go owns all reads and writes. The Python AI service stores nothing.
 
-![Praxis ERD](diagrams/erd.svg)
+![Praxis ERD](diagrams/erd.png)
 
 ## How the data flows
 
