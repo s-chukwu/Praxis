@@ -49,7 +49,7 @@ class FakeAIService(BaseHTTPRequestHandler):
         self.wfile.write(FakeAIService.reply_body)
 
     def log_message(self, *args):
-        pass  
+        pass
 
 def start_server(handler):
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -138,7 +138,7 @@ def test_response_is_passed_back(proxy_url):
     assert status == 200
     assert body == b'{"overall": 82.5}'
     #drop unsfe heasers
-    assert "Set-Cookie" not in headers  
+    assert "Set-Cookie" not in headers
 
 
 @pytest.mark.parametrize("status", [401, 409, 422, 500])
