@@ -51,7 +51,6 @@ class FakeAIService(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  
 
-
 def start_server(handler):
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -138,7 +137,8 @@ def test_response_is_passed_back(proxy_url):
     status, headers, body = send(proxy_url, "/internal/v1/score", "POST", b"{}")
     assert status == 200
     assert body == b'{"overall": 82.5}'
-    assert "Set-Cookie" not in headers  # unsafe headers are dropped
+    #drop unsfe heasers
+    assert "Set-Cookie" not in headers  
 
 
 @pytest.mark.parametrize("status", [401, 409, 422, 500])
@@ -158,3 +158,4 @@ def test_unreachable_service_gives_502():
     server.server_close()
     assert status == 502
     assert b"unreachable" in body
+    
