@@ -158,4 +158,3 @@ def test_unreachable_service_gives_502():
     server.server_close()
     assert status == 502
     assert b"unreachable" in body
-    
