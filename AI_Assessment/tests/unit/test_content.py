@@ -128,7 +128,7 @@ def test_file_name_must_match_declared_version(content_dir: Path) -> None:
 
 def test_scenario_bank_without_assessor_keys_refuses_to_load(content_dir: Path) -> None:
     (content_dir / "assessor_keys" / "1.0.0.json").unlink()
-    with pytest.raises(ContentError, match=r"unpaired versions \[.1.0.0.\]"):
+    with pytest.raises(ContentError, match="no assessor keys for scenario bank 1.0.0"):
         load_registry(content_dir)
 
 
@@ -136,3 +136,46 @@ def test_current_pins_must_exist(content_dir: Path) -> None:
     edit_json(content_dir / "current.json", lambda d: d.update(curriculum="2.0.0"))
     with pytest.raises(ContentError, match="pins a missing version"):
         load_registry(content_dir)
+
+
+class FakeKeySource:
+    """Stands in for Key Vault: serves documents from memory and records what was asked for."""
+
+    def __init__(self, documents: dict[str, bytes]) -> None:
+        self.documents = documents
+        self.requested: list[str] = []
+
+    def read(self, version: str) -> bytes | None:
+        self.requested.append(version)
+        return self.documents.get(version)
+
+
+def _shipped_keys() -> dict[str, bytes]:
+    return {p.stem: p.read_bytes() for p in (DEFAULT_CONTENT_DIR / "assessor_keys").glob("*.json")}
+
+
+def test_keys_come_from_the_given_source_not_the_local_files(content_dir: Path) -> None:
+    source = FakeKeySource(_shipped_keys())
+    for local in (content_dir / "assessor_keys").glob("*.json"):
+        local.unlink()
+    registry = load_registry(content_dir, source)
+    assert sorted(source.requested) == ["1.0.0", "1.1.0"]
+    assert registry.assessor_key_set("1.1.0").content.version == "1.1.0"
+
+
+def test_key_set_declaring_another_version_is_rejected() -> None:
+    documents = _shipped_keys()
+    documents["1.1.0"] = documents["1.0.0"]
+    with pytest.raises(ContentError, match="scenario bank 1.1.0 declare version 1.0.0"):
+        load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents))
+
+
+def test_invalid_key_set_error_never_quotes_the_keys() -> None:
+    documents = _shipped_keys()
+    # A key sentence in a patterned field: Pydantic's own message would quote it back.
+    secret = b"Promises or confirms a refund"
+    original = b'"event_type": "unauthorized_action", "when": "' + secret + b'"'
+    documents["1.1.0"] = documents["1.1.0"].replace(original, b'"event_type": "' + secret + b'", "when": "x"')
+    with pytest.raises(ContentError, match="are invalid") as exc:
+        load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents))
+    assert secret.decode() not in str(exc.value)
