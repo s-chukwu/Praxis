@@ -6,32 +6,36 @@ updates:
     schedule:
       interval: weekly
     groups:
-      actions:
+      actions-minor-patch:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: gomod
     directory: /backend
     schedule:
       interval: weekly
     groups:
-      go:
+      go-minor-patch:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: pip
     directory: /AI_Assessment/service
     schedule:
       interval: weekly
     groups:
-      python:
+      python-minor-patch:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
     groups:
-      npm:
+      npm-minor-patch:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: /backend
