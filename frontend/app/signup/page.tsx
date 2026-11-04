@@ -1,93 +1,52 @@
 'use client';
-
 import { useState } from 'react';
 import Link from 'next/link';
 
 export default function SignupPage() {
-  const [fullName, setFullName] = useState('');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!fullName || !email || !password) {
-      setError('Please fill in all fields.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
-      return;
-    }
-
+    if (!name || !email || !password || !confirm) return setError('Please fill in all fields.');
+    if (password.length < 8) return setError('Password must be at least 8 characters.');
+    if (password !== confirm) return setError('Passwords do not match.');
     setError('');
-    console.log('Signing up with:', { fullName, email, password });
-    // TODO: Hook up to backend signup endpoint
+    console.log('Signing up:', { name, email });
+    // TODO(Chidi): POST to the signup endpoint
   };
 
+  const input =
+    'mt-1 w-full rounded-md border border-[#1C222B] bg-[#080B0F] px-3 py-2 text-[12px] text-white placeholder:text-gray-600 focus:border-blue-500 focus:outline-none';
+
   return (
-    <div className="max-w-md mx-auto mt-12 bg-slate-900 border border-slate-800 rounded-xl p-8 shadow-xl">
-      <h1 className="text-2xl font-bold text-white mb-2">Create an Account</h1>
-      <p className="text-sm text-slate-400 mb-6">
-        Join Praxis to accelerate your career or find top talent.
-      </p>
-
-      {error && (
-        <div className="mb-4 p-3 bg-red-950/50 border border-red-800 rounded-lg text-red-200 text-sm" role="alert">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#0A0D12]">
+      <form onSubmit={handleSubmit} className="w-[380px] space-y-4 rounded-lg border border-[#161B22] bg-[#0D1117] p-6">
         <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
-          <input
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-            placeholder="Full Name"
-          />
+          <h1 className="text-[15px] font-semibold text-white">Create your account</h1>
+          <p className="mt-1 text-[11px] text-gray-500">Start building your skills baseline</p>
         </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-            placeholder="you@example.com"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-            placeholder="••••••••"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-sm transition-colors"
-        >
-          Create Account
-        </button>
+        {error && <div role="alert" className="rounded-md border border-red-800 bg-red-950/50 p-2 text-[11px] text-red-200">{error}</div>}
+        <label className="block text-[11px] text-gray-300">Full name
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jamie Lee" className={input} />
+        </label>
+        <label className="block text-[11px] text-gray-300">Email address
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" className={input} />
+        </label>
+        <label className="block text-[11px] text-gray-300">Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className={input} />
+        </label>
+        <label className="block text-[11px] text-gray-300">Confirm password
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" className={input} />
+        </label>
+        <button type="submit" className="w-full rounded-md bg-blue-500 py-2 text-[12px] font-medium text-white hover:bg-blue-400">Create account</button>
+        <p className="text-center text-[11px] text-gray-500">
+          Already have an account? <Link href="/login" className="text-blue-400 hover:underline">Sign in</Link>
+        </p>
       </form>
-
-      <p className="text-xs text-slate-400 mt-6 text-center">
-        Already have an account?{' '}
-        <Link href="/login" className="text-indigo-400 hover:underline">
-          Log in
-        </Link>
-      </p>
     </div>
   );
 }
