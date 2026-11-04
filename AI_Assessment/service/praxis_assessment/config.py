@@ -8,16 +8,17 @@ from typing import Literal
 
 DEFAULT_CONTENT_DIR = Path(__file__).parent / "content" / "data"
 MIN_SECRET_BYTES = 32
-KEY_VAULT_ENV = ("AZURE_KEY_VAULT_URL", "ASSESSOR_KEYS_SECRET_NAME", "AZURE_CLIENT_ID")
+KEY_VAULT_ENV = ("AZURE_KEY_VAULT_URL", "AZURE_CLIENT_ID", "ASSESSOR_KEYS_SECRET_NAME", "CAPSTONE_HELD_OUT_SECRET_NAME")
 
 
 @dataclass(frozen=True, slots=True)
 class KeyVaultSettings:
-    """Where production reads the assessor keys. client_id selects the app's user-assigned identity."""
+    """Where production reads protected content. client_id selects the app's user-assigned identity."""
 
     url: str
-    secret_name: str
     client_id: str
+    assessor_keys_secret: str
+    held_out_secret: str
 
     def __post_init__(self) -> None:
         if not self.url.startswith("https://"):
@@ -73,8 +74,8 @@ class Settings:
             raise ValueError(f"PRAXIS_ENV must be 'local' or 'production', got {env!r}")
         secret = environ.get("AI_SERVICE_SHARED_SECRET") or None
         previous = environ.get("AI_SERVICE_SHARED_SECRET_PREVIOUS") or None
-        url, secret_name, client_id = (environ.get(name) or None for name in KEY_VAULT_ENV)
-        vault_values = (url, secret_name, client_id)
+        url, client_id, keys_secret, held_out_secret = (environ.get(name) or None for name in KEY_VAULT_ENV)
+        vault_values = (url, client_id, keys_secret, held_out_secret)
         if any(vault_values) and not all(vault_values):
             missing = [name for name, value in zip(KEY_VAULT_ENV, vault_values, strict=True) if value is None]
             raise ValueError(f"Key Vault is partly configured; also set {', '.join(missing)}")
@@ -83,5 +84,9 @@ class Settings:
             shared_secret=secret.encode() if secret else None,
             previous_shared_secret=previous.encode() if previous else None,
             content_dir=Path(environ.get("PRAXIS_CONTENT_DIR", DEFAULT_CONTENT_DIR)),
-            key_vault=KeyVaultSettings(url, secret_name, client_id) if url and secret_name and client_id else None,
+            key_vault=(
+                KeyVaultSettings(url, client_id, keys_secret, held_out_secret)
+                if url and client_id and keys_secret and held_out_secret
+                else None
+            ),
         )

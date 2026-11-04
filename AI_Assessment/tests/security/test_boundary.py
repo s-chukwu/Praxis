@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
 from praxis_assessment.api.examples import CAPSTONE_EXAMPLES, COMPARE_EXAMPLES
-from praxis_assessment.config import DEFAULT_CONTENT_DIR, KeyVaultSettings, Settings
+from praxis_assessment.config import DEFAULT_CONTENT_DIR, KEY_VAULT_ENV, KeyVaultSettings, Settings
 from praxis_assessment.content import load_registry
 from praxis_assessment.content.keys import MappedKeySource
 from support import REVIEWER, REVIEWER_ID, SECRET, plan_payload, score_payload, signed_headers
@@ -250,27 +250,32 @@ def test_short_secret_refuses_to_start() -> None:
         Settings.from_env({"AI_SERVICE_SHARED_SECRET": "short"})
 
 
-VAULT = KeyVaultSettings("https://praxis-kv-26c0.vault.azure.net/", "assessor-keys", str(uuid.uuid4()))
+VAULT = KeyVaultSettings(
+    "https://praxis-kv-26c0.vault.azure.net/", str(uuid.uuid4()), "assessor-keys", "capstone-held-out"
+)
 VAULT_ENV = {
     "PRAXIS_ENV": "production",
     "AI_SERVICE_SHARED_SECRET": SECRET.decode(),
     "AZURE_KEY_VAULT_URL": VAULT.url,
-    "ASSESSOR_KEYS_SECRET_NAME": VAULT.secret_name,
     "AZURE_CLIENT_ID": VAULT.client_id,
+    "ASSESSOR_KEYS_SECRET_NAME": VAULT.assessor_keys_secret,
+    "CAPSTONE_HELD_OUT_SECRET_NAME": VAULT.held_out_secret,
 }
 
 
 @pytest.fixture
 def production_app(monkeypatch: pytest.MonkeyPatch, content_dir: Path):
-    """Production settings with the vault replaced by the shipped keys, and the local key files deleted."""
-    shipped = {p.stem: p.read_bytes() for p in (content_dir / "assessor_keys").glob("*.json")}
-    for path in (content_dir / "assessor_keys").glob("*.json"):
-        path.unlink()
-    requested: list[KeyVaultSettings] = []
+    """Production settings with the vault serving the shipped files, and those local files deleted."""
+    shipped = {}
+    for secret, folder in ((VAULT.assessor_keys_secret, "assessor_keys"), (VAULT.held_out_secret, "capstone_held_out")):
+        shipped[secret] = {p.stem: p.read_bytes() for p in (content_dir / folder).glob("*.json")}
+        for path in (content_dir / folder).glob("*.json"):
+            path.unlink()
+    requested: list[tuple[str, str, str]] = []
 
     def fake_vault(url: str, secret_name: str, client_id: str) -> MappedKeySource:
-        requested.append(KeyVaultSettings(url, secret_name, client_id))
-        return MappedKeySource(shipped)
+        requested.append((url, secret_name, client_id))
+        return MappedKeySource(shipped[secret_name])
 
     monkeypatch.setattr("praxis_assessment.api.vault_key_source", fake_vault)
     settings = Settings(env="production", shared_secret=SECRET, content_dir=content_dir, key_vault=VAULT)
@@ -279,18 +284,19 @@ def production_app(monkeypatch: pytest.MonkeyPatch, content_dir: Path):
 
 def test_production_reads_keys_from_the_vault_never_the_image(production_app) -> None:
     client, requested = production_app
-    assert requested == [VAULT]
-    response = client.get(PACKET, headers=signed_headers("GET", PACKET, b""))
-    assert response.status_code == 200
+    assert requested == [(VAULT.url, s, VAULT.client_id) for s in (VAULT.assessor_keys_secret, VAULT.held_out_secret)]
+    assert client.get(PACKET, headers=signed_headers("GET", PACKET, b"")).status_code == 200
+    body = json.dumps(CAPSTONE_EXAMPLES["naive_held_out"]["value"]).encode()
+    assert client.post(CAPSTONE, content=body, headers=signed_headers("POST", CAPSTONE, body)).status_code == 200
 
 
 def test_production_without_key_vault_refuses_to_start() -> None:
-    env = {k: v for k, v in VAULT_ENV.items() if not k.startswith(("AZURE_", "ASSESSOR_"))}
-    with pytest.raises(ValueError, match="AZURE_CLIENT_ID are required when PRAXIS_ENV=production"):
+    env = {k: v for k, v in VAULT_ENV.items() if k not in KEY_VAULT_ENV}
+    with pytest.raises(ValueError, match="CAPSTONE_HELD_OUT_SECRET_NAME are required when PRAXIS_ENV=production"):
         Settings.from_env(env)
 
 
-@pytest.mark.parametrize("missing", ["AZURE_KEY_VAULT_URL", "ASSESSOR_KEYS_SECRET_NAME", "AZURE_CLIENT_ID"])
+@pytest.mark.parametrize("missing", KEY_VAULT_ENV)
 def test_partly_configured_key_vault_refuses_to_start(missing: str) -> None:
     env = {k: v for k, v in VAULT_ENV.items() if k != missing}
     with pytest.raises(ValueError, match=f"partly configured; also set {missing}"):

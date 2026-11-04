@@ -37,7 +37,7 @@ class MappedKeySource:
 
 
 def vault_key_source(vault_url: str, secret_name: str, client_id: str) -> MappedKeySource:
-    """Read the assessor-keys secret once, at startup, with the app's user-assigned managed identity."""
+    """Read one versioned secret once, at startup, with the app's user-assigned managed identity."""
     # Imported here so local runs and the test suite never load the Azure SDK.
     from azure.core.exceptions import AzureError
     from azure.identity import ManagedIdentityCredential
@@ -62,7 +62,7 @@ def vault_key_source(vault_url: str, secret_name: str, client_id: str) -> Mapped
 
 
 def parse_key_map(secret_name: str, value: str) -> MappedKeySource:
-    """The secret maps scenario bank version to that version's assessor_keys document."""
+    """The secret maps a content version to that version's protected document, as an object or as file text."""
     try:
         data = json.loads(value)
     except ValueError:

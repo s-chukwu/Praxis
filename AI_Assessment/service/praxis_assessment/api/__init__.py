@@ -30,11 +30,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Content loads and cross-checks here, so a broken content file stops the deploy instead of a request.
     app.state.settings = settings
     vault = settings.key_vault
-    keys = vault_key_source(vault.url, vault.secret_name, vault.client_id) if vault else None
-    app.state.registry = load_registry(settings.content_dir, keys)
-    source = {"source": "key_vault", "secret": vault.secret_name} if vault else {"source": "local_files"}
-    versions = sorted(app.state.registry.assessor_keys)
-    log.info(json.dumps({"event": "assessor_keys_loaded", **source, "versions": versions}))
+    if vault:
+        keys = vault_key_source(vault.url, vault.assessor_keys_secret, vault.client_id)
+        held_out = vault_key_source(vault.url, vault.held_out_secret, vault.client_id)
+        app.state.registry = load_registry(settings.content_dir, keys, held_out)
+        source = {"source": "key_vault", "secrets": [vault.assessor_keys_secret, vault.held_out_secret]}
+    else:
+        app.state.registry = load_registry(settings.content_dir)
+        source = {"source": "local_files"}
+    registry = app.state.registry
+    loaded = {"assessor_keys": sorted(registry.assessor_keys), "held_out": sorted(registry.held_out)}
+    log.info(json.dumps({"event": "protected_content_loaded", **source, "versions": loaded}))
 
     install_error_handlers(app)
     app.include_router(health_router)
