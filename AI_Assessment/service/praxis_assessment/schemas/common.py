@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints
 
@@ -17,6 +17,7 @@ class Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+ActorRole = Literal["reviewer", "candidate", "admin", "system"]
 SemVer = Annotated[str, StringConstraints(pattern=r"^\d+\.\d+\.\d+$")]
 CompetencyCode = Annotated[str, StringConstraints(pattern=r"^[CB][1-9]$")]
 ScenarioId = Annotated[str, StringConstraints(pattern=r"^CS-\d{2}-[A-Z]$")]

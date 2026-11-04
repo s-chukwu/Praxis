@@ -26,6 +26,9 @@ services:
       AI_SERVICE_SHARED_SECRET_PREVIOUS: "${AI_SERVICE_SHARED_SECRET_PREVIOUS:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+      PRAXIS_PROTECTED_CONTENT_DIR: /protected
+    volumes:
+      - ./AI_Assessment/tests/fixtures:/protected:ro
     healthcheck:
       test:
         [
