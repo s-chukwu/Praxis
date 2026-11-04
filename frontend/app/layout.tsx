@@ -2,9 +2,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 import AppShell from '@/components/AppShell';
-import Navbar from '@/components/Navbar';
-import Sidebar from '@/components/Sidebar';
-
 
 export const metadata: Metadata = {
   title: 'Praxis - AI Workforce Platform',
