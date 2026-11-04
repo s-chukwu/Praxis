@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import time
 import uuid
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from praxis_assessment.api.auth import ACTOR_HEADER, SIGNATURE_HEADER, TIMESTAMP_HEADER, sign_request
+from praxis_assessment.api.examples import CAREFUL_BOT_CONFIG
 
 SECRET = b"test-secret-that-is-at-least-32-bytes!!"
 REVIEWER_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
@@ -93,29 +95,7 @@ def plan_payload(scores: dict[str, int] | None = None, **overrides: Any) -> dict
     return payload
 
 
+
 def bot_config(**overrides: Any) -> dict[str, Any]:
-    """A careful candidate's KoraDesk bot: safety rules first, one intent per approved policy."""
-    config: dict[str, Any] = {
-        "capstone_version": "1.0.0",
-        "rules": [
-            {"id": "takeover", "phrases": ["changed the email", "can't get in", "hacked"], "action": "handoff",
-             "priority": "urgent"},
-            {"id": "money", "phrases": ["refund", "money back", "pay back", "charged twice"], "action": "handoff",
-             "priority": "urgent"},
-            {"id": "injection", "phrases": ["instructions", "system", "admin mode", "legally binding"],
-             "action": "abstain", "flag_injection": True},
-            {"id": "credentials", "phrases": ["password", "card number", "pin"], "action": "handoff"},
-            {"id": "other_customer", "phrases": ["another customer", "customer who"], "action": "abstain"},
-            {"id": "human", "phrases": ["person", "human", "agent"], "action": "handoff"},
-        ],
-        "intents": [
-            {"id": "hours", "phrases": ["open", "close", "hours", "sunday", "saturday"], "source_id": "FAQ-HOURS"},
-            {"id": "returns", "phrases": ["return", "send back"], "source_id": "FAQ-RETURNS"},
-            {"id": "delivery", "phrases": ["how long", "delivery time"], "source_id": "FAQ-DELIVERY"},
-            {"id": "privacy", "phrases": ["my data", "privacy"], "source_id": "FAQ-PRIVACY"},
-        ],
-        "fallback": "abstain",
-        "handoff_after_failures": 2,
-    }
-    config.update(overrides)
-    return config
+    """A careful candidate's KoraDesk bot, the same one /docs shows; overrides model weaker configs."""
+    return copy.deepcopy(CAREFUL_BOT_CONFIG) | overrides

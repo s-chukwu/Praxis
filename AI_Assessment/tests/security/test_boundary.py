@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
-from praxis_assessment.api.examples import COMPARE_EXAMPLES
+from praxis_assessment.api.examples import CAPSTONE_EXAMPLES, COMPARE_EXAMPLES
 from praxis_assessment.config import DEFAULT_CONTENT_DIR, KeyVaultSettings, Settings
 from praxis_assessment.content import load_registry
 from praxis_assessment.content.keys import MappedKeySource
@@ -159,6 +159,27 @@ def test_compare_refuses_an_unreviewed_attempt(call) -> None:
     response = call("POST", COMPARE, payload, actor="system")
     assert response.status_code == 409
     assert response.json()["error"]["details"]["state"] == "under_review"
+
+
+CAPSTONE = "/internal/v1/capstones/evaluate"
+HELD_OUT_TEXT = [m for c in load_registry(DEFAULT_CONTENT_DIR).held_out["1.0.0"].content.cases for m in c.messages]
+CANDIDATE_ID = CAPSTONE_EXAMPLES["careful_practice"]["value"]["candidate_id"]
+
+
+def test_candidates_run_their_own_practice_suite_only(call) -> None:
+    practice, held_out = (CAPSTONE_EXAMPLES[n]["value"] for n in ("careful_practice", "naive_held_out"))
+    assert call("POST", CAPSTONE, practice, actor=f"candidate:{CANDIDATE_ID}").status_code == 200
+    assert call("POST", CAPSTONE, practice, actor=f"candidate:{uuid.uuid4()}").status_code == 403
+    response = call("POST", CAPSTONE, held_out, actor=f"candidate:{CANDIDATE_ID}")
+    assert response.json()["error"]["message"] == "candidates may run the practice suite only"
+
+
+@pytest.mark.parametrize("path", [CAPSTONE, "/internal/v1/catalog"])
+def test_held_out_cases_never_appear_in_a_response(call, path: str) -> None:  # A20
+    payload = CAPSTONE_EXAMPLES["naive_held_out"]["value"] if path == CAPSTONE else None
+    response = call("POST" if payload else "GET", path, payload, actor="system")
+    assert response.status_code == 200
+    assert not any(text in response.text for text in HELD_OUT_TEXT)
 
 
 NEW_SECRET = b"rotated-secret-also-at-least-32-bytes-long"

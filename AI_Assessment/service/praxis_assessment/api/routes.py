@@ -7,13 +7,16 @@ from fastapi import APIRouter, Body, Depends, Query, Request
 from praxis_assessment import SERVICE_NAME, SERVICE_VERSION
 from praxis_assessment.api.auth import ALL_ROLES, Caller, require_caller
 from praxis_assessment.api.errors import ERROR_RESPONSES
-from praxis_assessment.api.examples import COMPARE_EXAMPLES, PLAN_EXAMPLES, SCORE_EXAMPLES
+from praxis_assessment.api.examples import CAPSTONE_EXAMPLES, COMPARE_EXAMPLES, PLAN_EXAMPLES, SCORE_EXAMPLES
 from praxis_assessment.content import ContentRegistry
 from praxis_assessment.content.models import Scenario, ScenarioBank
+from praxis_assessment.content.registry import content_hash
 from praxis_assessment.domain.allocation import allocate
+from praxis_assessment.domain.capstone import evaluate
 from praxis_assessment.domain.comparison import compare_attempts
 from praxis_assessment.domain.scoring import score_attempt
 from praxis_assessment.errors import Forbidden, UnsupportedVersion
+from praxis_assessment.schemas.capstone import CapstoneRequest, CapstoneResponse
 from praxis_assessment.schemas.catalog import AssessorPacketResponse, CatalogResponse
 from praxis_assessment.schemas.common import ContentRef, ScenarioId, SemVer
 from praxis_assessment.schemas.comparison import CompareRequest, CompareResponse
@@ -127,6 +130,35 @@ async def compare(
         rubric=ContentRef(version=rubric.content.version, sha256=rubric.sha256),
         scenarios=ContentRef(version=bank.content.version, sha256=bank.sha256),
         result=compare_attempts(rubric.content, baseline, final, body),
+    )
+
+
+@internal_router.post("/capstones/evaluate")
+async def evaluate_capstone(
+    body: Annotated[CapstoneRequest, Body(openapi_examples=CAPSTONE_EXAMPLES)],
+    caller: Annotated[Caller, Depends(require_caller("candidate", "reviewer", "system"))],
+    registry: Registry,
+) -> CapstoneResponse:
+    # Candidates may rerun the practice cases freely. The held-out run is the assessment itself, so only
+    # our Go backend (as system or a reviewer) starts it, and only once per locked attempt.
+    if caller.role == "candidate":
+        if body.suite == "held_out":
+            raise Forbidden("candidates may run the practice suite only")
+        if caller.actor_id != body.candidate_id:
+            raise Forbidden("candidate_id does not match the signed actor")
+
+    version = body.config.capstone_version
+    capstone = registry.capstone(version)
+    held_out = registry.held_out_cases(version) if body.suite == "held_out" else None
+    cases = held_out.content.cases if held_out else capstone.content.practice
+    return CapstoneResponse(
+        request_id=body.request_id,
+        attempt_id=body.attempt_id,
+        candidate_id=body.candidate_id,
+        capstone=ContentRef(version=version, sha256=capstone.sha256),
+        held_out=ContentRef(version=version, sha256=held_out.sha256) if held_out else None,
+        config_sha256=content_hash(body.config),
+        result=evaluate(capstone.content, body.config, cases, body.suite),
     )
 
 

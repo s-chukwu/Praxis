@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
 
 from praxis_assessment.content.capstone import BotAction, CaseCategory, Priority, SourceId
-from praxis_assessment.schemas.common import Frozen, SemVer, Slug, require_unique
+from praxis_assessment.schemas.common import ContentRef, Frozen, SemVer, Slug, require_unique
 
 HandoffState = Literal["requested", "queued", "accepted_by_human", "queue_unavailable", "timeout"]
 _WORDS = re.compile(r"\w+")
@@ -113,3 +114,22 @@ class Evaluation(Frozen):
     cases: tuple[CaseResult, ...]
     # Passing cases is evidence for B1-B3, not a score. A reviewer always signs off.
     requires_human_review: Literal[True] = True
+
+
+class CapstoneRequest(Frozen):
+    request_id: UUID
+    attempt_id: UUID
+    candidate_id: UUID
+    suite: Literal["practice", "held_out"]
+    config: BotConfig
+
+
+class CapstoneResponse(Frozen):
+    request_id: UUID
+    attempt_id: UUID
+    candidate_id: UUID
+    capstone: ContentRef
+    held_out: ContentRef | None
+    # Our Go backend stores this with the result, so a score always points at the exact config it judged.
+    config_sha256: str
+    result: Evaluation

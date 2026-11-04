@@ -32,7 +32,7 @@ class Versioned[T: BaseModel]:
     sha256: str
 
 
-def _content_hash(model: BaseModel) -> str:
+def content_hash(model: BaseModel) -> str:
     # I hash the canonical JSON, not the file bytes, so reformatting a file does not change its identity.
     canonical = json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -48,7 +48,7 @@ def _load_kind[T: BaseModel](root: Path, kind: str, model: type[T]) -> Mapping[s
         version = item.version  # type: ignore[attr-defined]
         if version != path.stem:
             raise ContentError(f"{kind}/{path.name} declares version {version}")
-        loaded[version] = Versioned(item, _content_hash(item))
+        loaded[version] = Versioned(item, content_hash(item))
     if not loaded:
         raise ContentError(f"no {kind} content in {root / kind}")
     return MappingProxyType(loaded)
@@ -72,7 +72,7 @@ def _load_protected[T: BaseModel](
         declared = item.version  # type: ignore[attr-defined]
         if declared != version:
             raise ContentError(f"{what} {version} declare version {declared}")
-        loaded[version] = Versioned(item, _content_hash(item))
+        loaded[version] = Versioned(item, content_hash(item))
     return MappingProxyType(loaded)
 
 
@@ -117,6 +117,9 @@ class ContentRegistry:
 
     def capstone(self, version: str) -> Versioned[Capstone]:
         return _lookup(self.capstones, "capstone", version)
+
+    def held_out_cases(self, version: str) -> Versioned[HeldOutCases]:
+        return _lookup(self.held_out, "capstone_held_out", version)
 
     def curriculum(self, version: str) -> Versioned[Curriculum]:
         return _lookup(self.curricula, "curriculum", version)
