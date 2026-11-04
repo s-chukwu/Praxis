@@ -8,6 +8,7 @@ from pydantic import AfterValidator, Field, StringConstraints, model_validator
 from praxis_assessment.content.capstone import BotAction, Priority, SourceId
 from praxis_assessment.schemas.common import Frozen, SemVer, Slug, require_unique
 
+HandoffState = Literal["requested", "queued", "accepted_by_human", "queue_unavailable", "timeout"]
 _WORDS = re.compile(r"\w+")
 
 
@@ -70,3 +71,14 @@ class BotTurn(Frozen):
     priority: Priority | None
     flagged_injection: bool
     reply: str
+
+
+class HandoffTicket(Frozen):
+    """What the human queue receives. The time is stamped by our Go backend when a real ticket is created."""
+
+    reason: str  # the rule that fired, or "no_answer" when the bot ran out of options
+    priority: Priority
+    channel: Literal["chat"] = "chat"
+    summary: str  # the customer's words with secrets masked; never shown back to the customer
+    states: tuple[HandoffState, ...]
+    customer_notice: str
