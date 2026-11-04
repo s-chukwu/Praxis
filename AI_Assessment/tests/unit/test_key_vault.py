@@ -13,10 +13,11 @@ from praxis_assessment.config import DEFAULT_CONTENT_DIR
 from praxis_assessment.content import load_registry
 from praxis_assessment.content.keys import parse_key_map, vault_key_source
 from praxis_assessment.errors import ContentError
+from support import FIXTURES, HELD_OUT_FIXTURES, fixture_registry
 
 VAULT = "https://praxis-kv-26c0.vault.azure.net/"
 CLIENT_ID = "33333333-3333-4333-8333-333333333333"
-SHIPPED = {p.stem: json.loads(p.read_text()) for p in (DEFAULT_CONTENT_DIR / "assessor_keys").glob("*.json")}
+SHIPPED = {p.stem: json.loads(p.read_text()) for p in (FIXTURES / "assessor_keys").glob("*.json")}
 
 
 class FakeVault:
@@ -58,24 +59,26 @@ class FakeVault:
 
 def test_keys_load_from_the_vault_with_the_user_assigned_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     vault = FakeVault(monkeypatch, json.dumps(SHIPPED))
-    registry = load_registry(DEFAULT_CONTENT_DIR, vault_key_source(VAULT, "assessor-keys", CLIENT_ID))
+    keys = vault_key_source(VAULT, "assessor-keys", CLIENT_ID)
+    registry = load_registry(DEFAULT_CONTENT_DIR, keys, HELD_OUT_FIXTURES)
     assert vault.calls == {
         "client_id": CLIENT_ID, "vault_url": VAULT, "secret": "assessor-keys", "credential_closed": True,
     }  # fmt: skip
-    assert registry.assessor_key_set("1.1.0").content == load_registry(DEFAULT_CONTENT_DIR).assessor_key_set(
+    assert registry.assessor_key_set("1.1.0").content == fixture_registry().assessor_key_set(
         "1.1.0"
     ).content
 
 
 def test_versions_stored_as_file_text_load_too() -> None:
     source = parse_key_map("assessor-keys", json.dumps({v: json.dumps(doc) for v, doc in SHIPPED.items()}))
-    assert load_registry(DEFAULT_CONTENT_DIR, source).assessor_key_set("1.0.0").content.version == "1.0.0"
+    registry = load_registry(DEFAULT_CONTENT_DIR, source, HELD_OUT_FIXTURES)
+    assert registry.assessor_key_set("1.0.0").content.version == "1.0.0"
 
 
 def test_a_bank_version_missing_from_the_secret_refuses_to_start() -> None:
     source = parse_key_map("assessor-keys", json.dumps({"1.0.0": SHIPPED["1.0.0"]}))
     with pytest.raises(ContentError, match="no assessor keys for scenario bank 1.1.0"):
-        load_registry(DEFAULT_CONTENT_DIR, source)
+        load_registry(DEFAULT_CONTENT_DIR, source, HELD_OUT_FIXTURES)
 
 
 @pytest.mark.parametrize(

@@ -11,9 +11,18 @@ from fastapi.testclient import TestClient
 from praxis_assessment.api import create_app
 from praxis_assessment.api.examples import CAPSTONE_EXAMPLES, COMPARE_EXAMPLES
 from praxis_assessment.config import DEFAULT_CONTENT_DIR, KEY_VAULT_ENV, KeyVaultSettings, Settings
-from praxis_assessment.content import load_registry
 from praxis_assessment.content.keys import MappedKeySource
-from support import REVIEWER, REVIEWER_ID, SECRET, plan_payload, score_payload, signed_headers
+from praxis_assessment.errors import ContentError
+from support import (
+    FIXTURES,
+    REVIEWER,
+    REVIEWER_ID,
+    SECRET,
+    fixture_registry,
+    plan_payload,
+    score_payload,
+    signed_headers,
+)
 
 SCORE = "/internal/v1/diagnostics/score"
 PLANS = "/internal/v1/learning-plans"
@@ -105,7 +114,7 @@ def test_reviewer_cannot_score_their_own_attempt(call) -> None:
 PACKET = "/internal/v1/scenarios/CS-03-A/assessor-packet?version=1.1.0"
 KEY_TEXT = [
     text
-    for keys in load_registry(DEFAULT_CONTENT_DIR).assessor_keys.values()
+    for keys in fixture_registry().assessor_keys.values()
     for key in keys.content.keys
     for text in (*key.checks, *(e.when for e in key.critical_events))
 ]
@@ -162,7 +171,7 @@ def test_compare_refuses_an_unreviewed_attempt(call) -> None:
 
 
 CAPSTONE = "/internal/v1/capstones/evaluate"
-HELD_OUT_TEXT = [m for c in load_registry(DEFAULT_CONTENT_DIR).held_out["1.0.0"].content.cases for m in c.messages]
+HELD_OUT_TEXT = [m for c in fixture_registry().held_out["1.0.0"].content.cases for m in c.messages]
 CANDIDATE_ID = CAPSTONE_EXAMPLES["careful_practice"]["value"]["candidate_id"]
 
 
@@ -186,7 +195,8 @@ NEW_SECRET = b"rotated-secret-also-at-least-32-bytes-long"
 
 
 def rotating_client() -> TestClient:
-    return TestClient(create_app(Settings(env="local", shared_secret=NEW_SECRET, previous_shared_secret=SECRET)))
+    settings = Settings(env="local", shared_secret=NEW_SECRET, previous_shared_secret=SECRET, protected_dir=FIXTURES)
+    return TestClient(create_app(settings))
 
 
 @pytest.mark.parametrize("secret", [NEW_SECRET, SECRET])
@@ -197,7 +207,7 @@ def test_both_secrets_are_accepted_during_rotation(secret: bytes) -> None:
 
 
 def test_retired_secret_is_rejected_once_rotation_ends() -> None:
-    client = TestClient(create_app(Settings(env="local", shared_secret=NEW_SECRET)))
+    client = TestClient(create_app(Settings(env="local", shared_secret=NEW_SECRET, protected_dir=FIXTURES)))
     body = body_of(score_payload())
     assert (
         client.post(SCORE, content=body, headers=signed_headers("POST", SCORE, body, secret=SECRET)).status_code == 401
@@ -233,7 +243,7 @@ def test_settings_repr_never_contains_secrets() -> None:
 
 
 def test_internal_routes_refuse_when_secret_is_unset() -> None:
-    client = TestClient(create_app(Settings(env="local", shared_secret=None)))
+    client = TestClient(create_app(Settings(env="local", shared_secret=None, protected_dir=FIXTURES)))
     assert client.get("/health").status_code == 200
     response = client.post(SCORE, json=score_payload())
     assert response.status_code == 503
@@ -310,6 +320,17 @@ def test_key_vault_url_must_be_https() -> None:
 
 def test_full_vault_settings_load_from_the_environment() -> None:
     assert Settings.from_env(VAULT_ENV).key_vault == VAULT
+
+
+def test_the_image_ships_no_protected_content() -> None:
+    # Everything under content/data goes into the public image; answer keys and held-out cases must not.
+    assert not [p.name for p in DEFAULT_CONTENT_DIR.iterdir() if p.name in {f.name for f in FIXTURES.iterdir()}]
+
+
+def test_local_run_without_protected_dir_refuses_to_start() -> None:
+    with pytest.raises(ContentError, match="set PRAXIS_PROTECTED_CONTENT_DIR"):
+        create_app(Settings(env="local", shared_secret=SECRET))
+    assert Settings.from_env({"PRAXIS_PROTECTED_CONTENT_DIR": str(FIXTURES)}).protected_dir == FIXTURES
 
 
 def test_production_hides_interactive_docs(production_app) -> None:

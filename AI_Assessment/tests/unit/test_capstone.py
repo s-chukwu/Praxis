@@ -3,13 +3,11 @@ from __future__ import annotations
 import pytest
 
 import praxis_assessment.domain.handoff as handoff
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.domain.capstone import evaluate
 from praxis_assessment.schemas.capstone import BotConfig
-from support import bot_config
+from support import bot_config, fixture_registry
 
-REGISTRY = load_registry(DEFAULT_CONTENT_DIR)
+REGISTRY = fixture_registry()
 CAPSTONE = REGISTRY.capstone("1.0.0").content
 HELD_OUT = REGISTRY.held_out["1.0.0"].content.cases
 CAREFUL = BotConfig.model_validate(bot_config())

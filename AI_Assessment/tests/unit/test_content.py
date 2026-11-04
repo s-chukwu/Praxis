@@ -7,11 +7,11 @@ import pytest
 from praxis_assessment.config import DEFAULT_CONTENT_DIR
 from praxis_assessment.content import load_registry
 from praxis_assessment.errors import ContentError, UnsupportedVersion
-from support import edit_json
+from support import FIXTURES, HELD_OUT_FIXTURES, edit_json, fixture_registry
 
 
 def test_shipped_content_loads_and_pins_resolve() -> None:
-    registry = load_registry(DEFAULT_CONTENT_DIR)
+    registry = fixture_registry()
     rubric = registry.rubric(registry.current.rubric).content
     assert sum(d.weight_bp for d in rubric.dimensions) == 10_000
     assert rubric.pilot_fixture_min_weighted_score == 75
@@ -19,7 +19,7 @@ def test_shipped_content_loads_and_pins_resolve() -> None:
 
 
 def test_triage_keys_veto_a_missed_account_takeover() -> None:
-    keys = {k.scenario_id: k for k in load_registry(DEFAULT_CONTENT_DIR).assessor_keys["1.1.0"].content.keys}
+    keys = {k.scenario_id: k for k in fixture_registry().assessor_keys["1.1.0"].content.keys}
     for scenario_id in ("CS-03-A", "CS-03-B"):
         assert [e.event_type for e in keys[scenario_id].critical_events] == ["missed_security_escalation"]
 
@@ -32,7 +32,7 @@ def test_reformatting_a_file_does_not_change_its_hash(content_dir: Path) -> None
 
 def test_unknown_version_is_an_explicit_error() -> None:
     with pytest.raises(UnsupportedVersion) as exc:
-        load_registry(DEFAULT_CONTENT_DIR).rubric("9.9.9")
+        fixture_registry().rubric("9.9.9")
     assert exc.value.details["available"] == ["0.1.0", "0.2.0"]
 
 
@@ -161,7 +161,7 @@ class FakeKeySource:
 
 
 def _shipped_keys() -> dict[str, bytes]:
-    return {p.stem: p.read_bytes() for p in (DEFAULT_CONTENT_DIR / "assessor_keys").glob("*.json")}
+    return {p.stem: p.read_bytes() for p in (FIXTURES / "assessor_keys").glob("*.json")}
 
 
 def test_keys_come_from_the_given_source_not_the_local_files(content_dir: Path) -> None:
@@ -177,7 +177,7 @@ def test_key_set_declaring_another_version_is_rejected() -> None:
     documents = _shipped_keys()
     documents["1.1.0"] = documents["1.0.0"]
     with pytest.raises(ContentError, match="scenario bank 1.1.0 declare version 1.0.0"):
-        load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents))
+        load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents), HELD_OUT_FIXTURES)
 
 
 def test_invalid_key_set_error_never_quotes_the_keys() -> None:
@@ -187,5 +187,5 @@ def test_invalid_key_set_error_never_quotes_the_keys() -> None:
     original = b'"event_type": "unauthorized_action", "when": "' + secret + b'"'
     documents["1.1.0"] = documents["1.1.0"].replace(original, b'"event_type": "' + secret + b'", "when": "x"')
     with pytest.raises(ContentError, match="are invalid") as exc:
-        load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents))
+        load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents), HELD_OUT_FIXTURES)
     assert secret.decode() not in str(exc.value)

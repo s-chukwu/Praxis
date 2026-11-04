@@ -4,14 +4,12 @@ from typing import Any
 
 import pytest
 
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.domain.bot import SPEAKER, converse, require_compatible
 from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.capstone import BotConfig, BotTurn
-from support import bot_config
+from support import bot_config, fixture_registry
 
-CAPSTONE = load_registry(DEFAULT_CONTENT_DIR).capstone("1.0.0").content
+CAPSTONE = fixture_registry().capstone("1.0.0").content
 
 
 def last(*messages: str, **overrides: Any) -> BotTurn:

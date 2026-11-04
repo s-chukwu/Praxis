@@ -4,15 +4,13 @@ import time
 
 import pytest
 
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.content.capstone import QueueOutcome
 from praxis_assessment.domain.bot import converse
 from praxis_assessment.domain.handoff import JOINED, MASK, hand_over, redact
 from praxis_assessment.schemas.capstone import BotConfig
-from support import bot_config
+from support import bot_config, fixture_registry
 
-CAPSTONE = load_registry(DEFAULT_CONTENT_DIR).capstone("1.0.0").content
+CAPSTONE = fixture_registry().capstone("1.0.0").content
 CONFIG = BotConfig.model_validate(bot_config())
 
 

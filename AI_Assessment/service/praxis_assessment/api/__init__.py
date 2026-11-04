@@ -11,7 +11,8 @@ from praxis_assessment.api.middleware import RequestContextMiddleware
 from praxis_assessment.api.routes import health_router, internal_router
 from praxis_assessment.config import Settings
 from praxis_assessment.content import load_registry
-from praxis_assessment.content.keys import vault_key_source
+from praxis_assessment.content.keys import LocalKeySource, vault_key_source
+from praxis_assessment.errors import ContentError
 
 log = logging.getLogger("praxis_assessment.content")
 
@@ -35,9 +36,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         held_out = vault_key_source(vault.url, vault.held_out_secret, vault.client_id)
         app.state.registry = load_registry(settings.content_dir, keys, held_out)
         source = {"source": "key_vault", "secrets": [vault.assessor_keys_secret, vault.held_out_secret]}
+    elif settings.protected_dir:
+        local = settings.protected_dir
+        keys, held_out = LocalKeySource(local / "assessor_keys"), LocalKeySource(local / "capstone_held_out")
+        app.state.registry = load_registry(settings.content_dir, keys, held_out)
+        source = {"source": "local_files", "dir": str(local)}
     else:
-        app.state.registry = load_registry(settings.content_dir)
-        source = {"source": "local_files"}
+        raise ContentError(
+            "no protected content: set PRAXIS_PROTECTED_CONTENT_DIR (e.g. AI_Assessment/tests/fixtures) "
+            "for a local run, or the Key Vault settings in production"
+        )
     registry = app.state.registry
     loaded = {"assessor_keys": sorted(registry.assessor_keys), "held_out": sorted(registry.held_out)}
     log.info(json.dumps({"event": "protected_content_loaded", **source, "versions": loaded}))

@@ -129,7 +129,8 @@ def test_historical_attempt_keeps_its_rubric(content_dir: Path) -> None:
     keys.write_text((content_dir / "assessor_keys" / "1.0.0.json").read_text())
     edit_json(keys, lambda d: d.update(version="1.2.0"))
 
-    client = TestClient(create_app(Settings(env="local", shared_secret=SECRET, content_dir=content_dir)))
+    settings = Settings(env="local", shared_secret=SECRET, content_dir=content_dir, protected_dir=content_dir)
+    client = TestClient(create_app(settings))
 
     def score(scenario_version: str, rubric_version: str):
         body = json.dumps(score_payload(scenario_version=scenario_version, rubric_version=rubric_version)).encode()
@@ -181,7 +182,8 @@ def test_policy_bound_to_another_role_standard_is_409(content_dir: Path) -> None
     standard = content_dir / "role_standard" / "1.2.0.json"
     standard.write_text((content_dir / "role_standard" / "1.0.0.json").read_text())
     edit_json(standard, lambda d: d.update(version="1.2.0"))
-    client = TestClient(create_app(Settings(env="local", shared_secret=SECRET, content_dir=content_dir)))
+    settings = Settings(env="local", shared_secret=SECRET, content_dir=content_dir, protected_dir=content_dir)
+    client = TestClient(create_app(settings))
 
     body = json.dumps(plan_payload(role_standard_version="1.2.0")).encode()
     response = client.post(PLANS, content=body, headers=signed_headers("POST", PLANS, body, actor="system"))

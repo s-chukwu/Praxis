@@ -36,6 +36,8 @@ class Settings:
     max_body_bytes: int = 256 * 1024
     max_clock_skew_s: int = 300
     key_vault: KeyVaultSettings | None = None
+    # Local runs only: a folder holding assessor_keys/ and capstone_held_out/. The image ships neither.
+    protected_dir: Path | None = None
 
     def __post_init__(self) -> None:
         for name, secret in (
@@ -84,6 +86,7 @@ class Settings:
             shared_secret=secret.encode() if secret else None,
             previous_shared_secret=previous.encode() if previous else None,
             content_dir=Path(environ.get("PRAXIS_CONTENT_DIR", DEFAULT_CONTENT_DIR)),
+            protected_dir=Path(protected) if (protected := environ.get("PRAXIS_PROTECTED_CONTENT_DIR")) else None,
             key_vault=(
                 KeyVaultSettings(url, client_id, keys_secret, held_out_secret)
                 if url and client_id and keys_secret and held_out_secret

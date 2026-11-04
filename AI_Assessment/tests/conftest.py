@@ -11,14 +11,14 @@ from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
 from praxis_assessment.config import DEFAULT_CONTENT_DIR, Settings
-from support import REVIEWER, SECRET, signed_headers
+from support import FIXTURES, REVIEWER, SECRET, signed_headers
 
 SignedCall = Callable[..., Any]
 
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(env="local", shared_secret=SECRET)
+    return Settings(env="local", shared_secret=SECRET, protected_dir=FIXTURES)
 
 
 @pytest.fixture
@@ -40,7 +40,9 @@ def call(client: TestClient) -> SignedCall:
 
 @pytest.fixture
 def content_dir(tmp_path: Path) -> Path:
-    """A writable copy of the shipped content, for integrity and version tests."""
+    """A writable copy of the shipped content plus the protected fixtures, for integrity and version tests."""
     target = tmp_path / "content"
     shutil.copytree(DEFAULT_CONTENT_DIR, target)
+    for protected in FIXTURES.iterdir():
+        shutil.copytree(protected, target / protected.name)
     return target

@@ -43,7 +43,7 @@ The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (in `.
 The service refuses to start if the previous secret is set without a current one, equals it, or is under 32 bytes. Without it the service still serves `/health` locally but answers 503 `service_auth_not_configured` on internal routes, and refuses to start with `PRAXIS_ENV=production`. Optional `X-Request-ID` (8–64 chars `[A-Za-z0-9-]`) is echoed back and logged; otherwise one is generated.
 
 ### Assessor keys and Azure Key Vault
-In production the service reads the assessor keys and the capstone held-out cases from Key Vault once, at startup, with the app's user-assigned managed identity. It never reads the JSON files baked into the image. Locally, with none of the variables below set, it reads `content/data/assessor_keys/*.json`.
+In production the service reads the assessor keys and the capstone held-out cases from Key Vault once, at startup, with the app's user-assigned managed identity. It never reads the JSON files baked into the image. Locally, with none of the variables below set, it reads the dev copies from the folder in `PRAXIS_PROTECTED_CONTENT_DIR` (use `AI_Assessment/tests/fixtures`, which holds `assessor_keys/` and `capstone_held_out/`); without it the service refuses to start. Neither folder is under `content/data`, so the image never contains them.
 
 | Variable | Example | Notes |
 |---|---|---|
