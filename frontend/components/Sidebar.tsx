@@ -1,3 +1,4 @@
+
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -46,6 +47,7 @@ export default function Sidebar() {
   const path = usePathname();
   const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
   return (
+
     <aside className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-[#161B22] bg-[#080B0F] p-3">
       <div className="px-2 pb-4 pt-2"><Logo /></div>
 
