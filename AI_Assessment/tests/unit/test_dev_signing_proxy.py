@@ -1,5 +1,3 @@
-"""tests for scripts/dev_signing_proxy.py."""
-
 import importlib.util
 import socket
 import threading
@@ -137,7 +135,7 @@ def test_response_is_passed_back(proxy_url):
     status, headers, body = send(proxy_url, "/internal/v1/score", "POST", b"{}")
     assert status == 200
     assert body == b'{"overall": 82.5}'
-    #drop unsfe heasers
+    # Headers like Set-Cookie must not pass from the service to the browser.
     assert "Set-Cookie" not in headers
 
 

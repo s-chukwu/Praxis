@@ -26,8 +26,8 @@ def _score(scores: tuple[int, int, int, int], **extra: Any) -> dict[str, Any]:
         "candidate_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e03",
         "reviewer_id": DEMO_REVIEWER_ID,
         "scenario_id": "CS-01-A",
-        "scenario_version": "1.0.0",
-        "rubric_version": "0.1.0",
+        "scenario_version": "1.1.0",
+        "rubric_version": "0.2.0",
         "dimensions": {
             "accuracy": {"score": accuracy, "evidence": ["one captured payment of RWF 42,000"]},
             "judgment": {"score": judgment, "evidence": ["Escalated to billing"]},
@@ -147,5 +147,52 @@ COMPARE_EXAMPLES: dict[str, dict[str, Any]] = {
     "safety_regressed": {
         "summary": "Safety dropped after training: flagged for a human",
         "value": _compare((3, 3, 4, 3), (3, 4, 2, 3)),
+    },
+}
+
+
+# A careful candidate's KoraDesk bot: safety rules first, then one intent per approved policy.
+CAREFUL_BOT_CONFIG: dict[str, Any] = {
+    "capstone_version": "1.0.0",
+    "rules": [
+        {"id": "takeover", "phrases": ["changed the email", "can't get in", "hacked"], "action": "handoff",
+         "priority": "urgent"},
+        {"id": "money", "phrases": ["refund", "money back", "pay back", "charged twice"], "action": "handoff",
+         "priority": "urgent"},
+        {"id": "injection", "phrases": ["instructions", "system", "admin mode", "legally binding"],
+         "action": "abstain", "flag_injection": True},
+        {"id": "credentials", "phrases": ["password", "card number", "pin"], "action": "handoff"},
+        {"id": "other_customer", "phrases": ["another customer", "customer who"], "action": "abstain"},
+        {"id": "human", "phrases": ["person", "human", "agent"], "action": "handoff"},
+    ],
+    "intents": [
+        {"id": "hours", "phrases": ["open", "close", "hours", "sunday", "saturday"], "source_id": "FAQ-HOURS"},
+        {"id": "returns", "phrases": ["return", "send back"], "source_id": "FAQ-RETURNS"},
+        {"id": "delivery", "phrases": ["how long", "delivery time"], "source_id": "FAQ-DELIVERY"},
+        {"id": "privacy", "phrases": ["my data", "privacy"], "source_id": "FAQ-PRIVACY"},
+    ],
+    "fallback": "abstain",
+    "handoff_after_failures": 2,
+}
+
+
+def _capstone(suite: str, config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "request_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e41",
+        "attempt_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e42",
+        "candidate_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e03",
+        "suite": suite,
+        "config": config,
+    }
+
+
+CAPSTONE_EXAMPLES: dict[str, dict[str, Any]] = {
+    "careful_practice": {
+        "summary": "A careful config on the practice cases: every case passes",
+        "value": _capstone("practice", CAREFUL_BOT_CONFIG),
+    },
+    "naive_held_out": {
+        "summary": "FAQ answers only, no safety rules: critical failures on the held-out cases",
+        "value": _capstone("held_out", CAREFUL_BOT_CONFIG | {"rules": [], "handoff_after_failures": 5}),
     },
 }

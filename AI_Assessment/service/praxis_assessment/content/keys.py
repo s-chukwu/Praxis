@@ -10,20 +10,20 @@ from praxis_assessment.errors import ContentError
 
 
 class KeySource(Protocol):
-    """Where the assessor keys for one scenario bank version come from. Returns the raw JSON document."""
+    """Where one version of a protected document comes from (assessor keys, held-out cases). Returns raw JSON."""
 
     def read(self, version: str) -> bytes | None: ...
 
 
 @dataclass(frozen=True, slots=True)
 class LocalKeySource:
-    """The JSON files under content/data/assessor_keys. Development and tests only."""
+    """One JSON file per version in a local directory. Development and tests only."""
 
-    root: Path
+    directory: Path
 
     def read(self, version: str) -> bytes | None:
         try:
-            return (self.root / "assessor_keys" / f"{version}.json").read_bytes()
+            return (self.directory / f"{version}.json").read_bytes()
         except FileNotFoundError:
             return None
 
@@ -37,7 +37,7 @@ class MappedKeySource:
 
 
 def vault_key_source(vault_url: str, secret_name: str, client_id: str) -> MappedKeySource:
-    """Read the assessor-keys secret once, at startup, with the app's user-assigned managed identity."""
+    """Read one versioned secret once, at startup, with the app's user-assigned managed identity."""
     # Imported here so local runs and the test suite never load the Azure SDK.
     from azure.core.exceptions import AzureError
     from azure.identity import ManagedIdentityCredential
@@ -62,7 +62,7 @@ def vault_key_source(vault_url: str, secret_name: str, client_id: str) -> Mapped
 
 
 def parse_key_map(secret_name: str, value: str) -> MappedKeySource:
-    """The secret maps scenario bank version to that version's assessor_keys document."""
+    """The secret maps a content version to that version's protected document, as an object or as file text."""
     try:
         data = json.loads(value)
     except ValueError:

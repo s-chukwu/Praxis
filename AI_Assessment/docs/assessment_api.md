@@ -1,9 +1,9 @@
 # Python assessment service contract and integration guide
 
 ## Boundary
-`Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing and calls no model in milestones 1–2. DO NOT expose port 8000 publicly or use live applicant data.
+`Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing and calls no model in milestones 1–4. DO NOT expose port 8000 publicly or use live applicant data.
 
-## Implemented endpoints (milestones 1–3)
+## Implemented endpoints (milestones 1–4)
 The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_ENV=local`; it is disabled in production.
 
 | Method + path | Allowed actor | Purpose |
@@ -13,13 +13,14 @@ The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_
 | `GET /internal/v1/scenarios/{id}/assessor-packet?version=X` | `reviewer` or `admin` | the scenario plus its grading key (checks, critical events). Never forward to a candidate. |
 | `POST /internal/v1/diagnostics/score` | `reviewer` only; `reviewer_id` must equal the signed actor id and differ from `candidate_id` | weighted rubric score, critical-safety veto, evidence check, proposed outcome |
 | `POST /internal/v1/diagnostics/compare` | `reviewer` or `system` | per-dimension change from a reviewed baseline to its reviewed parallel final form; flags any regression for a human |
+| `POST /internal/v1/capstones/evaluate` | `candidate` (own `candidate_id`, `practice` only), `reviewer`, `system` | runs a candidate's bot config against the practice or held-out cases |
 | `POST /internal/v1/learning-plans` | `reviewer` or `system` | skills gaps, safety gate and prerequisite-ordered modules from reviewed scores |
 
 **Attempt workflow.** `attempt_workflows` lists every allowed state change and who may make it (`reviewed` is locked except for an admin appeal; `voided` is final). Python publishes the table; our Go backend must enforce it on every attempt write, in the same transaction.
 
-The old `GET /catalog` is removed. `POST /assessment/plan` is replaced by `POST /internal/v1/learning-plans`, which takes reviewed scores only, never CV claims. The chatbot endpoint arrives in milestone 4.
+The old `GET /catalog` is removed. `POST /assessment/plan` is replaced by `POST /internal/v1/learning-plans`, which takes reviewed scores only, never CV claims.
 
-### Service authentication (Go must implement)
+### Service authentication (our Go backend must implement)
 Every `/internal/v1` request carries:
 
 ```
@@ -34,7 +35,7 @@ The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (in `.
 
 **Replay window.** A signed request stays valid for ±300 s and carries no nonce, so a captured request can be replayed inside that window. That is acceptable only because every endpoint today is a pure computation that stores nothing. Before any endpoint changes state, add a single-use nonce to the canonical string and a shared store to reject repeats.
 
-**Rotating the secret without downtime.** Python accepts `AI_SERVICE_SHARED_SECRET_PREVIOUS` alongside the current secret; Go always signs with the current one.
+**Rotating the secret without downtime.** Python accepts `AI_SERVICE_SHARED_SECRET_PREVIOUS` alongside the current secret; our Go backend always signs with the current one.
 1. Python: set `AI_SERVICE_SHARED_SECRET=<new>` and `AI_SERVICE_SHARED_SECRET_PREVIOUS=<old>`, deploy. Both now verify.
 2. Go: switch to `<new>`, deploy.
 3. Python: remove `AI_SERVICE_SHARED_SECRET_PREVIOUS`, deploy. `<old>` is now rejected.
@@ -42,15 +43,16 @@ The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (in `.
 The service refuses to start if the previous secret is set without a current one, equals it, or is under 32 bytes. Without it the service still serves `/health` locally but answers 503 `service_auth_not_configured` on internal routes, and refuses to start with `PRAXIS_ENV=production`. Optional `X-Request-ID` (8–64 chars `[A-Za-z0-9-]`) is echoed back and logged; otherwise one is generated.
 
 ### Assessor keys and Azure Key Vault
-In production the service reads the assessor keys from Key Vault once, at startup, with the app's user-assigned managed identity. It never reads the JSON files baked into the image. Locally, with none of the variables below set, it reads `content/data/assessor_keys/*.json`.
+In production the service reads the assessor keys and the capstone held-out cases from Key Vault once, at startup, with the app's user-assigned managed identity. It never reads the JSON files baked into the image. Locally, with none of the variables below set, it reads the dev copies from the folder in `PRAXIS_PROTECTED_CONTENT_DIR` (use `AI_Assessment/tests/fixtures`, which holds `assessor_keys/` and `capstone_held_out/`); without it the service refuses to start. Neither folder is under `content/data`, so the image never contains them.
 
 | Variable | Example | Notes |
 |---|---|---|
 | `AZURE_KEY_VAULT_URL` | `https://praxis-kv-26c0.vault.azure.net/` | must be `https://` |
 | `ASSESSOR_KEYS_SECRET_NAME` | `assessor-keys` | |
+| `CAPSTONE_HELD_OUT_SECRET_NAME` | `capstone-held-out` | same format, keyed by capstone version |
 | `AZURE_CLIENT_ID` | client ID of `praxis-ai-identity` | selects the user-assigned identity |
 
-All three are required when `PRAXIS_ENV=production`, and setting only some of them refuses to start. The secret is a JSON object mapping each scenario bank version to that version's `assessor_keys` document, as an object or as the file text: `{"1.0.0": {...}, "1.1.0": {...}}`. Every scenario bank the service loads needs an entry. A missing secret, denied access, invalid JSON or a missing version stops startup; the running revision keeps serving. Errors name the Azure error type and HTTP status, never the secret or Azure's message. A Key Vault secret holds at most 25 KB (about 4 KB per version today), so plan a second secret before the map approaches that. **Real keys go into Key Vault only, never into git.**
+All four are required when `PRAXIS_ENV=production`, and setting only some of them refuses to start. The secret is a JSON object mapping each scenario bank version to that version's `assessor_keys` document, as an object or as the file text: `{"1.0.0": {...}, "1.1.0": {...}}`. Every scenario bank the service loads needs an entry. A missing secret, denied access, invalid JSON or a missing version stops startup; the running revision keeps serving. Errors name the Azure error type and HTTP status, never the secret or Azure's message. A Key Vault secret holds at most 25 KB (about 4 KB per version today), so plan a second secret before the map approaches that. **Real keys go into Key Vault only, never into git.**
 
 ### POST /internal/v1/diagnostics/score
 Request (all fields required unless noted; unknown fields are rejected):
@@ -58,7 +60,7 @@ Request (all fields required unless noted; unknown fields are rejected):
 ```json
 {
   "request_id": "uuid", "attempt_id": "uuid", "candidate_id": "uuid", "reviewer_id": "uuid",
-  "scenario_id": "CS-01-A", "scenario_version": "1.0.0", "rubric_version": "0.1.0",
+  "scenario_id": "CS-01-A", "scenario_version": "1.1.0", "rubric_version": "0.2.0",
   "dimensions": {
     "accuracy":      {"score": 3, "evidence": ["exact quote from an artifact"]},
     "judgment":      {"score": 3, "evidence": ["..."]},
@@ -83,7 +85,7 @@ Response 200:
 ```json
 {
   "request_id": "uuid", "attempt_id": "uuid", "scenario_id": "CS-01-A", "stage": "baseline",
-  "rubric": {"version": "0.1.0", "sha256": "..."}, "scenarios": {"version": "1.0.0", "sha256": "..."},
+  "rubric": {"version": "0.2.0", "sha256": "..."}, "scenarios": {"version": "1.1.0", "sha256": "..."},
   "result": {
     "dimensions": [{"id": "accuracy", "score": 3, "weight_bp": 3000, "weighted_points": 22.5}],
     "weighted_score": 82.5, "pilot_threshold": 75.0, "pilot_threshold_is_validated": false,
@@ -115,6 +117,18 @@ The response gives each dimension's `baseline`, `final`, `delta` and `direction`
 - `final.scenario_id` must be the baseline's parallel form, baseline stage first. The security pair (CS-04) never compares. Otherwise 422.
 - Both attempts must be `reviewed` and scored on the same scenario bank and rubric, otherwise 409 `not_comparable`. After a rubric change, a reviewer re-scores the baseline under the new rubric first.
 - Every rubric dimension is required; a missing one is 422, never a zero.
+
+### POST /internal/v1/capstones/evaluate
+Builder-track capstone. The candidate's bot is configuration only: `rules` (phrases that hand over or abstain, checked first), `intents` (phrases mapped to an approved knowledge-base `source_id`), a `fallback` and `handoff_after_failures`. There is no field for free-text replies and no code runs. Phrases match whole words only, never as patterns.
+
+```json
+{"request_id": "uuid", "attempt_id": "uuid", "candidate_id": "uuid", "suite": "practice",
+ "config": {"capstone_version": "1.0.0", "rules": [...], "intents": [...], "fallback": "abstain", "handoff_after_failures": 2}}
+```
+
+The bot answers only with approved text, labels every reply as automated, never says a person joined before `accepted_by_human`, and masks card numbers and passwords in handoff tickets. The response has `passed`/`total`, `critical_failures` (case ids), per-category coverage, each case's turns and fail reasons (`wrong_action`, `wrong_source`, `wrong_priority`, `missed_injection`, `leaked_secret`), and `config_sha256`; store that hash with the result. `requires_human_review` is always true: a reviewer scores B1-B3.
+- `practice` cases are public (also in `/catalog`); candidates may rerun them.
+- `held_out` cases are server-only. Results report case id, category and outcome but never the customer messages or tickets. Our Go backend starts this run once per locked attempt; candidates get 403.
 
 ### POST /internal/v1/learning-plans
 Request (unknown fields, including `claimed_skills`, are rejected):

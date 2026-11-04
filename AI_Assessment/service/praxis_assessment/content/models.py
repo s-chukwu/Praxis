@@ -292,3 +292,4 @@ class CurrentPins(Frozen):
     curriculum: SemVer
     allocation_policy: SemVer
     attempt_workflow: SemVer
+    capstone: SemVer
