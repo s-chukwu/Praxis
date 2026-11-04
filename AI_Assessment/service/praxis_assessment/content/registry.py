@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
 from pydantic import BaseModel, ValidationError
 
+from praxis_assessment.content.keys import KeySource, LocalKeySource
 from praxis_assessment.content.models import (
     AllocationPolicy,
     AssessorKeys,
@@ -47,6 +48,24 @@ def _load_kind[T: BaseModel](root: Path, kind: str, model: type[T]) -> Mapping[s
         loaded[version] = Versioned(item, _content_hash(item))
     if not loaded:
         raise ContentError(f"no {kind} content in {root / kind}")
+    return MappingProxyType(loaded)
+
+
+def _load_keys(source: KeySource, versions: Iterable[str]) -> Mapping[str, Versioned[AssessorKeys]]:
+    loaded: dict[str, Versioned[AssessorKeys]] = {}
+    for version in versions:
+        raw = source.read(version)
+        if raw is None:
+            raise ContentError(f"no assessor keys for scenario bank {version}")
+        try:
+            keys = AssessorKeys.model_validate_json(raw)
+        except ValidationError as exc:
+            # Pydantic's message quotes the offending input, and the input here is the answer key.
+            problems = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+            raise ContentError(f"assessor keys for scenario bank {version} are invalid: {problems}") from None
+        if keys.version != version:
+            raise ContentError(f"assessor keys for scenario bank {version} declare version {keys.version}")
+        loaded[version] = Versioned(keys, _content_hash(keys))
     return MappingProxyType(loaded)
 
 
@@ -94,19 +113,21 @@ class ContentRegistry:
         return _lookup(self.allocation_policies, "allocation_policy", version)
 
 
-def load_registry(root: Path) -> ContentRegistry:
+def load_registry(root: Path, keys: KeySource | None = None) -> ContentRegistry:
     try:
         current = CurrentPins.model_validate_json((root / "current.json").read_bytes())
     except (OSError, ValidationError) as exc:
         raise ContentError(f"current.json: {exc}") from exc
 
+    scenario_banks = _load_kind(root, "scenarios", ScenarioBank)
     registry = ContentRegistry(
         role_standards=_load_kind(root, "role_standard", RoleStandard),
         rubrics=_load_kind(root, "rubric", Rubric),
-        scenario_banks=_load_kind(root, "scenarios", ScenarioBank),
+        scenario_banks=scenario_banks,
         curricula=_load_kind(root, "curriculum", Curriculum),
         allocation_policies=_load_kind(root, "allocation_policy", AllocationPolicy),
-        assessor_keys=_load_kind(root, "assessor_keys", AssessorKeys),
+        # Keys are fetched per scenario bank, so every bank has exactly one key set by construction.
+        assessor_keys=_load_keys(keys or LocalKeySource(root), scenario_banks.keys()),
         attempt_workflows=_load_kind(root, "attempt_workflow", AttemptWorkflow),
         current=current,
     )
@@ -132,8 +153,6 @@ def _check_references(reg: ContentRegistry) -> None:
             if unknown := set(scenario.competencies) - codes:
                 raise ContentError(f"scenarios {version}/{scenario.id} names unknown competencies {sorted(unknown)}")
 
-    if unpaired := sorted(reg.scenario_banks.keys() ^ reg.assessor_keys.keys()):
-        raise ContentError(f"scenario banks and assessor keys must come in pairs, unpaired versions {unpaired}")
     for version, keys in reg.assessor_keys.items():
         _check_keys(reg, version, keys.content)
 

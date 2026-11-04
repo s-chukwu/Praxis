@@ -41,6 +41,17 @@ The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (in `.
 
 The service refuses to start if the previous secret is set without a current one, equals it, or is under 32 bytes. Without it the service still serves `/health` locally but answers 503 `service_auth_not_configured` on internal routes, and refuses to start with `PRAXIS_ENV=production`. Optional `X-Request-ID` (8–64 chars `[A-Za-z0-9-]`) is echoed back and logged; otherwise one is generated.
 
+### Assessor keys and Azure Key Vault
+In production the service reads the assessor keys from Key Vault once, at startup, with the app's user-assigned managed identity. It never reads the JSON files baked into the image. Locally, with none of the variables below set, it reads `content/data/assessor_keys/*.json`.
+
+| Variable | Example | Notes |
+|---|---|---|
+| `AZURE_KEY_VAULT_URL` | `https://praxis-kv-26c0.vault.azure.net/` | must be `https://` |
+| `ASSESSOR_KEYS_SECRET_NAME` | `assessor-keys` | |
+| `AZURE_CLIENT_ID` | client ID of `praxis-ai-identity` | selects the user-assigned identity |
+
+All three are required when `PRAXIS_ENV=production`, and setting only some of them refuses to start. The secret is a JSON object mapping each scenario bank version to that version's `assessor_keys` document, as an object or as the file text: `{"1.0.0": {...}, "1.1.0": {...}}`. Every scenario bank the service loads needs an entry. A missing secret, denied access, invalid JSON or a missing version stops startup; the running revision keeps serving. Errors name the Azure error type and HTTP status, never the secret or Azure's message. A Key Vault secret holds at most 25 KB (about 4 KB per version today), so plan a second secret before the map approaches that. **Real keys go into Key Vault only, never into git.**
+
 ### POST /internal/v1/diagnostics/score
 Request (all fields required unless noted; unknown fields are rejected):
 

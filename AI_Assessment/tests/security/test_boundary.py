@@ -3,14 +3,16 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
 from praxis_assessment.api.examples import COMPARE_EXAMPLES
-from praxis_assessment.config import DEFAULT_CONTENT_DIR, Settings
+from praxis_assessment.config import DEFAULT_CONTENT_DIR, KeyVaultSettings, Settings
 from praxis_assessment.content import load_registry
+from praxis_assessment.content.keys import MappedKeySource
 from support import REVIEWER, REVIEWER_ID, SECRET, plan_payload, score_payload, signed_headers
 
 SCORE = "/internal/v1/diagnostics/score"
@@ -227,8 +229,64 @@ def test_short_secret_refuses_to_start() -> None:
         Settings.from_env({"AI_SERVICE_SHARED_SECRET": "short"})
 
 
-def test_production_hides_interactive_docs() -> None:
-    client = TestClient(create_app(Settings(env="production", shared_secret=SECRET)))
+VAULT = KeyVaultSettings("https://praxis-kv-26c0.vault.azure.net/", "assessor-keys", str(uuid.uuid4()))
+VAULT_ENV = {
+    "PRAXIS_ENV": "production",
+    "AI_SERVICE_SHARED_SECRET": SECRET.decode(),
+    "AZURE_KEY_VAULT_URL": VAULT.url,
+    "ASSESSOR_KEYS_SECRET_NAME": VAULT.secret_name,
+    "AZURE_CLIENT_ID": VAULT.client_id,
+}
+
+
+@pytest.fixture
+def production_app(monkeypatch: pytest.MonkeyPatch, content_dir: Path):
+    """Production settings with the vault replaced by the shipped keys, and the local key files deleted."""
+    shipped = {p.stem: p.read_bytes() for p in (content_dir / "assessor_keys").glob("*.json")}
+    for path in (content_dir / "assessor_keys").glob("*.json"):
+        path.unlink()
+    requested: list[KeyVaultSettings] = []
+
+    def fake_vault(url: str, secret_name: str, client_id: str) -> MappedKeySource:
+        requested.append(KeyVaultSettings(url, secret_name, client_id))
+        return MappedKeySource(shipped)
+
+    monkeypatch.setattr("praxis_assessment.api.vault_key_source", fake_vault)
+    settings = Settings(env="production", shared_secret=SECRET, content_dir=content_dir, key_vault=VAULT)
+    return TestClient(create_app(settings)), requested
+
+
+def test_production_reads_keys_from_the_vault_never_the_image(production_app) -> None:
+    client, requested = production_app
+    assert requested == [VAULT]
+    response = client.get(PACKET, headers=signed_headers("GET", PACKET, b""))
+    assert response.status_code == 200
+
+
+def test_production_without_key_vault_refuses_to_start() -> None:
+    env = {k: v for k, v in VAULT_ENV.items() if not k.startswith(("AZURE_", "ASSESSOR_"))}
+    with pytest.raises(ValueError, match="AZURE_CLIENT_ID are required when PRAXIS_ENV=production"):
+        Settings.from_env(env)
+
+
+@pytest.mark.parametrize("missing", ["AZURE_KEY_VAULT_URL", "ASSESSOR_KEYS_SECRET_NAME", "AZURE_CLIENT_ID"])
+def test_partly_configured_key_vault_refuses_to_start(missing: str) -> None:
+    env = {k: v for k, v in VAULT_ENV.items() if k != missing}
+    with pytest.raises(ValueError, match=f"partly configured; also set {missing}"):
+        Settings.from_env(env | {"PRAXIS_ENV": "local"})
+
+
+def test_key_vault_url_must_be_https() -> None:
+    with pytest.raises(ValueError, match="https"):
+        Settings.from_env(VAULT_ENV | {"AZURE_KEY_VAULT_URL": "http://praxis-kv-26c0.vault.azure.net/"})
+
+
+def test_full_vault_settings_load_from_the_environment() -> None:
+    assert Settings.from_env(VAULT_ENV).key_vault == VAULT
+
+
+def test_production_hides_interactive_docs(production_app) -> None:
+    client, _ = production_app
     assert client.get("/docs").status_code == 404
     assert client.get("/openapi.json").status_code == 404
 
