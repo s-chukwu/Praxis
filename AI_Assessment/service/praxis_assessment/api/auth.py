@@ -28,7 +28,7 @@ class Caller:
     actor_id: UUID | None
 
 
-# Go must build the exact same canonical string; the format is spelled out in docs/assessment_api.md.
+# Our Go backend must build the exact same canonical string; the format is spelled out in docs/assessment_api.md.
 def sign_request(secret: bytes, *, timestamp: str, method: str, path: str, actor: str, body: bytes) -> str:
     canonical = "\n".join((SIGNATURE_VERSION, timestamp, method.upper(), path, actor, hashlib.sha256(body).hexdigest()))
     return hmac.new(secret, canonical.encode(), hashlib.sha256).hexdigest()

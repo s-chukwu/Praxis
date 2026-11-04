@@ -38,9 +38,11 @@ def test_catalog_lists_versions_hashes_and_current_pins(call) -> None:
         "curriculum": "1.0.0",
         "allocation_policy": "1.0.0",
         "attempt_workflow": "1.0.0",
+        "capstone": "1.0.0",
     }
     assert set(body["sha256"]) == {
         "role_standard", "rubric", "scenarios", "curriculum", "allocation_policy", "attempt_workflow",
+        "capstone",
     }  # fmt: skip
     assert body["attempt_workflows"][0]["initial"] == "assigned"
     assert len(body["sha256"]["rubric"]["0.1.0"]) == 64
@@ -127,7 +129,8 @@ def test_historical_attempt_keeps_its_rubric(content_dir: Path) -> None:
     keys.write_text((content_dir / "assessor_keys" / "1.0.0.json").read_text())
     edit_json(keys, lambda d: d.update(version="1.2.0"))
 
-    client = TestClient(create_app(Settings(env="local", shared_secret=SECRET, content_dir=content_dir)))
+    settings = Settings(env="local", shared_secret=SECRET, content_dir=content_dir, protected_dir=content_dir)
+    client = TestClient(create_app(settings))
 
     def score(scenario_version: str, rubric_version: str):
         body = json.dumps(score_payload(scenario_version=scenario_version, rubric_version=rubric_version)).encode()
@@ -179,7 +182,8 @@ def test_policy_bound_to_another_role_standard_is_409(content_dir: Path) -> None
     standard = content_dir / "role_standard" / "1.2.0.json"
     standard.write_text((content_dir / "role_standard" / "1.0.0.json").read_text())
     edit_json(standard, lambda d: d.update(version="1.2.0"))
-    client = TestClient(create_app(Settings(env="local", shared_secret=SECRET, content_dir=content_dir)))
+    settings = Settings(env="local", shared_secret=SECRET, content_dir=content_dir, protected_dir=content_dir)
+    client = TestClient(create_app(settings))
 
     body = json.dumps(plan_payload(role_standard_version="1.2.0")).encode()
     response = client.post(PLANS, content=body, headers=signed_headers("POST", PLANS, body, actor="system"))

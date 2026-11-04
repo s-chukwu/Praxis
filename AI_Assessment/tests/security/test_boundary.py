@@ -9,11 +9,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
-from praxis_assessment.api.examples import COMPARE_EXAMPLES
-from praxis_assessment.config import DEFAULT_CONTENT_DIR, KeyVaultSettings, Settings
-from praxis_assessment.content import load_registry
+from praxis_assessment.api.examples import CAPSTONE_EXAMPLES, COMPARE_EXAMPLES
+from praxis_assessment.config import DEFAULT_CONTENT_DIR, KEY_VAULT_ENV, KeyVaultSettings, Settings
 from praxis_assessment.content.keys import MappedKeySource
-from support import REVIEWER, REVIEWER_ID, SECRET, plan_payload, score_payload, signed_headers
+from praxis_assessment.errors import ContentError
+from support import (
+    FIXTURES,
+    REVIEWER,
+    REVIEWER_ID,
+    SECRET,
+    fixture_registry,
+    plan_payload,
+    score_payload,
+    signed_headers,
+)
 
 SCORE = "/internal/v1/diagnostics/score"
 PLANS = "/internal/v1/learning-plans"
@@ -105,7 +114,7 @@ def test_reviewer_cannot_score_their_own_attempt(call) -> None:
 PACKET = "/internal/v1/scenarios/CS-03-A/assessor-packet?version=1.1.0"
 KEY_TEXT = [
     text
-    for keys in load_registry(DEFAULT_CONTENT_DIR).assessor_keys.values()
+    for keys in fixture_registry().assessor_keys.values()
     for key in keys.content.keys
     for text in (*key.checks, *(e.when for e in key.critical_events))
 ]
@@ -161,11 +170,33 @@ def test_compare_refuses_an_unreviewed_attempt(call) -> None:
     assert response.json()["error"]["details"]["state"] == "under_review"
 
 
+CAPSTONE = "/internal/v1/capstones/evaluate"
+HELD_OUT_TEXT = [m for c in fixture_registry().held_out["1.0.0"].content.cases for m in c.messages]
+CANDIDATE_ID = CAPSTONE_EXAMPLES["careful_practice"]["value"]["candidate_id"]
+
+
+def test_candidates_run_their_own_practice_suite_only(call) -> None:
+    practice, held_out = (CAPSTONE_EXAMPLES[n]["value"] for n in ("careful_practice", "naive_held_out"))
+    assert call("POST", CAPSTONE, practice, actor=f"candidate:{CANDIDATE_ID}").status_code == 200
+    assert call("POST", CAPSTONE, practice, actor=f"candidate:{uuid.uuid4()}").status_code == 403
+    response = call("POST", CAPSTONE, held_out, actor=f"candidate:{CANDIDATE_ID}")
+    assert response.json()["error"]["message"] == "candidates may run the practice suite only"
+
+
+@pytest.mark.parametrize("path", [CAPSTONE, "/internal/v1/catalog"])
+def test_held_out_cases_never_appear_in_a_response(call, path: str) -> None:  # A20
+    payload = CAPSTONE_EXAMPLES["naive_held_out"]["value"] if path == CAPSTONE else None
+    response = call("POST" if payload else "GET", path, payload, actor="system")
+    assert response.status_code == 200
+    assert not any(text in response.text for text in HELD_OUT_TEXT)
+
+
 NEW_SECRET = b"rotated-secret-also-at-least-32-bytes-long"
 
 
 def rotating_client() -> TestClient:
-    return TestClient(create_app(Settings(env="local", shared_secret=NEW_SECRET, previous_shared_secret=SECRET)))
+    settings = Settings(env="local", shared_secret=NEW_SECRET, previous_shared_secret=SECRET, protected_dir=FIXTURES)
+    return TestClient(create_app(settings))
 
 
 @pytest.mark.parametrize("secret", [NEW_SECRET, SECRET])
@@ -176,7 +207,7 @@ def test_both_secrets_are_accepted_during_rotation(secret: bytes) -> None:
 
 
 def test_retired_secret_is_rejected_once_rotation_ends() -> None:
-    client = TestClient(create_app(Settings(env="local", shared_secret=NEW_SECRET)))
+    client = TestClient(create_app(Settings(env="local", shared_secret=NEW_SECRET, protected_dir=FIXTURES)))
     body = body_of(score_payload())
     assert (
         client.post(SCORE, content=body, headers=signed_headers("POST", SCORE, body, secret=SECRET)).status_code == 401
@@ -212,7 +243,7 @@ def test_settings_repr_never_contains_secrets() -> None:
 
 
 def test_internal_routes_refuse_when_secret_is_unset() -> None:
-    client = TestClient(create_app(Settings(env="local", shared_secret=None)))
+    client = TestClient(create_app(Settings(env="local", shared_secret=None, protected_dir=FIXTURES)))
     assert client.get("/health").status_code == 200
     response = client.post(SCORE, json=score_payload())
     assert response.status_code == 503
@@ -229,27 +260,32 @@ def test_short_secret_refuses_to_start() -> None:
         Settings.from_env({"AI_SERVICE_SHARED_SECRET": "short"})
 
 
-VAULT = KeyVaultSettings("https://praxis-kv-26c0.vault.azure.net/", "assessor-keys", str(uuid.uuid4()))
+VAULT = KeyVaultSettings(
+    "https://praxis-kv-26c0.vault.azure.net/", str(uuid.uuid4()), "assessor-keys", "capstone-held-out"
+)
 VAULT_ENV = {
     "PRAXIS_ENV": "production",
     "AI_SERVICE_SHARED_SECRET": SECRET.decode(),
     "AZURE_KEY_VAULT_URL": VAULT.url,
-    "ASSESSOR_KEYS_SECRET_NAME": VAULT.secret_name,
     "AZURE_CLIENT_ID": VAULT.client_id,
+    "ASSESSOR_KEYS_SECRET_NAME": VAULT.assessor_keys_secret,
+    "CAPSTONE_HELD_OUT_SECRET_NAME": VAULT.held_out_secret,
 }
 
 
 @pytest.fixture
 def production_app(monkeypatch: pytest.MonkeyPatch, content_dir: Path):
-    """Production settings with the vault replaced by the shipped keys, and the local key files deleted."""
-    shipped = {p.stem: p.read_bytes() for p in (content_dir / "assessor_keys").glob("*.json")}
-    for path in (content_dir / "assessor_keys").glob("*.json"):
-        path.unlink()
-    requested: list[KeyVaultSettings] = []
+    """Production settings with the vault serving the shipped files, and those local files deleted."""
+    shipped = {}
+    for secret, folder in ((VAULT.assessor_keys_secret, "assessor_keys"), (VAULT.held_out_secret, "capstone_held_out")):
+        shipped[secret] = {p.stem: p.read_bytes() for p in (content_dir / folder).glob("*.json")}
+        for path in (content_dir / folder).glob("*.json"):
+            path.unlink()
+    requested: list[tuple[str, str, str]] = []
 
     def fake_vault(url: str, secret_name: str, client_id: str) -> MappedKeySource:
-        requested.append(KeyVaultSettings(url, secret_name, client_id))
-        return MappedKeySource(shipped)
+        requested.append((url, secret_name, client_id))
+        return MappedKeySource(shipped[secret_name])
 
     monkeypatch.setattr("praxis_assessment.api.vault_key_source", fake_vault)
     settings = Settings(env="production", shared_secret=SECRET, content_dir=content_dir, key_vault=VAULT)
@@ -258,18 +294,19 @@ def production_app(monkeypatch: pytest.MonkeyPatch, content_dir: Path):
 
 def test_production_reads_keys_from_the_vault_never_the_image(production_app) -> None:
     client, requested = production_app
-    assert requested == [VAULT]
-    response = client.get(PACKET, headers=signed_headers("GET", PACKET, b""))
-    assert response.status_code == 200
+    assert requested == [(VAULT.url, s, VAULT.client_id) for s in (VAULT.assessor_keys_secret, VAULT.held_out_secret)]
+    assert client.get(PACKET, headers=signed_headers("GET", PACKET, b"")).status_code == 200
+    body = json.dumps(CAPSTONE_EXAMPLES["naive_held_out"]["value"]).encode()
+    assert client.post(CAPSTONE, content=body, headers=signed_headers("POST", CAPSTONE, body)).status_code == 200
 
 
 def test_production_without_key_vault_refuses_to_start() -> None:
-    env = {k: v for k, v in VAULT_ENV.items() if not k.startswith(("AZURE_", "ASSESSOR_"))}
-    with pytest.raises(ValueError, match="AZURE_CLIENT_ID are required when PRAXIS_ENV=production"):
+    env = {k: v for k, v in VAULT_ENV.items() if k not in KEY_VAULT_ENV}
+    with pytest.raises(ValueError, match="CAPSTONE_HELD_OUT_SECRET_NAME are required when PRAXIS_ENV=production"):
         Settings.from_env(env)
 
 
-@pytest.mark.parametrize("missing", ["AZURE_KEY_VAULT_URL", "ASSESSOR_KEYS_SECRET_NAME", "AZURE_CLIENT_ID"])
+@pytest.mark.parametrize("missing", KEY_VAULT_ENV)
 def test_partly_configured_key_vault_refuses_to_start(missing: str) -> None:
     env = {k: v for k, v in VAULT_ENV.items() if k != missing}
     with pytest.raises(ValueError, match=f"partly configured; also set {missing}"):
@@ -283,6 +320,17 @@ def test_key_vault_url_must_be_https() -> None:
 
 def test_full_vault_settings_load_from_the_environment() -> None:
     assert Settings.from_env(VAULT_ENV).key_vault == VAULT
+
+
+def test_the_image_ships_no_protected_content() -> None:
+    # Everything under content/data goes into the public image; answer keys and held-out cases must not.
+    assert not [p.name for p in DEFAULT_CONTENT_DIR.iterdir() if p.name in {f.name for f in FIXTURES.iterdir()}]
+
+
+def test_local_run_without_protected_dir_refuses_to_start() -> None:
+    with pytest.raises(ContentError, match="set PRAXIS_PROTECTED_CONTENT_DIR"):
+        create_app(Settings(env="local", shared_secret=SECRET))
+    assert Settings.from_env({"PRAXIS_PROTECTED_CONTENT_DIR": str(FIXTURES)}).protected_dir == FIXTURES
 
 
 def test_production_hides_interactive_docs(production_app) -> None:

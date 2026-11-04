@@ -6,14 +6,12 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.domain.allocation import allocate
 from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.learning_plan import LearningPlan, LearningPlanRequest
-from support import OPERATOR_STRONG, plan_payload
+from support import OPERATOR_STRONG, fixture_registry, plan_payload
 
-REGISTRY = load_registry(DEFAULT_CONTENT_DIR)
+REGISTRY = fixture_registry()
 STANDARD = REGISTRY.role_standard("1.0.0").content
 POLICY = REGISTRY.allocation_policy("1.0.0").content
 CURRICULUM = REGISTRY.curriculum("1.0.0").content
