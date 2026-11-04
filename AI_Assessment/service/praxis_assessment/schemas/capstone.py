@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
 
-from praxis_assessment.content.capstone import Priority, SourceId
+from praxis_assessment.content.capstone import BotAction, Priority, SourceId
 from praxis_assessment.schemas.common import Frozen, SemVer, Slug, require_unique
 
 _WORDS = re.compile(r"\w+")
@@ -59,3 +59,14 @@ class BotConfig(Frozen):
     def _integrity(self) -> BotConfig:
         require_unique([r.id for r in self.rules] + [i.id for i in self.intents], "rule or intent id")
         return self
+
+
+class BotTurn(Frozen):
+    """One bot reply. Also the trace a reviewer reads when scoring B1 and B2."""
+
+    action: BotAction
+    matched: str | None  # the rule or intent id that decided this turn, or None for the fallback
+    source_id: SourceId | None
+    priority: Priority | None
+    flagged_injection: bool
+    reply: str
