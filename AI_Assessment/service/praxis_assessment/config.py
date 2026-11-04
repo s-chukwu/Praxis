@@ -30,7 +30,8 @@ class Settings:
     env: Literal["local", "production"]
     # repr=False keeps secrets out of tracebacks and any accidental log of the settings object.
     shared_secret: bytes | None = field(repr=False)
-    # Accepted alongside shared_secret only while a rotation is in progress. Go always signs with the current one.
+    # Accepted alongside shared_secret only while a rotation is in progress.
+    # Our Go backend always signs with the current one.
     previous_shared_secret: bytes | None = field(default=None, repr=False)
     content_dir: Path = DEFAULT_CONTENT_DIR
     max_body_bytes: int = 256 * 1024
@@ -57,7 +58,7 @@ class Settings:
         # refuse every call. In production a missing secret is a deployment bug, so I refuse to start.
         if self.env == "production" and self.shared_secret is None:
             raise ValueError("AI_SERVICE_SHARED_SECRET is required when PRAXIS_ENV=production")
-        # The image still carries the dev keys; production must never fall back to them.
+        # Production reads protected content from Key Vault only, never from a folder on disk.
         if self.env == "production" and self.key_vault is None:
             raise ValueError(f"{', '.join(KEY_VAULT_ENV)} are required when PRAXIS_ENV=production")
 

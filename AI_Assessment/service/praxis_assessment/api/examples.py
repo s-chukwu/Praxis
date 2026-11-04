@@ -26,8 +26,8 @@ def _score(scores: tuple[int, int, int, int], **extra: Any) -> dict[str, Any]:
         "candidate_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e03",
         "reviewer_id": DEMO_REVIEWER_ID,
         "scenario_id": "CS-01-A",
-        "scenario_version": "1.0.0",
-        "rubric_version": "0.1.0",
+        "scenario_version": "1.1.0",
+        "rubric_version": "0.2.0",
         "dimensions": {
             "accuracy": {"score": accuracy, "evidence": ["one captured payment of RWF 42,000"]},
             "judgment": {"score": judgment, "evidence": ["Escalated to billing"]},

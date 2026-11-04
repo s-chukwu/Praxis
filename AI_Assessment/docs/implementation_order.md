@@ -22,4 +22,4 @@ This is **Emmanuel's sequence only**. Other engineers control their own feature 
 
 ## Non-goals of this folder
 
-No frontend implementation, Go server/database migrations, infrastructure-as-code, employer marketplace, or real placements. This folder is specification-only until the Python project is intentionally started.
+No frontend implementation, Go server/database migrations, infrastructure-as-code, employer marketplace, or real placements.

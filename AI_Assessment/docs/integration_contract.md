@@ -1,6 +1,6 @@
 # AI / Assessment service — integration boundary
 
-**Owner:** AI / Assessment Engineering. **Audience:** other teams integrating with this service. **Status:** proposed API interface; **not yet implemented**. This is a contract draft, not a deployed OpenAPI document. Consult `assessment_api.md` for existing prototype conventions; these internal endpoints supersede prototype-only paths **when the Go/Python contract is approved**.
+**Owner:** AI / Assessment Engineering. **Audience:** other teams integrating with this service. **Status:** `catalog`, `diagnostics/score`, `learning-plans` and `capstones/evaluate` are implemented; `skills/suggest` is still proposed. `assessment_api.md` is the implemented contract and wins where the two differ; the live schema is `/openapi.json` in local runs.
 
 ## Ownership
 

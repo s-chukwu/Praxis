@@ -1,9 +1,9 @@
 # Python assessment service contract and integration guide
 
 ## Boundary
-`Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing and calls no model in milestones 1–2. DO NOT expose port 8000 publicly or use live applicant data.
+`Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing and calls no model in milestones 1–4. DO NOT expose port 8000 publicly or use live applicant data.
 
-## Implemented endpoints (milestones 1–3)
+## Implemented endpoints (milestones 1–4)
 The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_ENV=local`; it is disabled in production.
 
 | Method + path | Allowed actor | Purpose |
@@ -18,9 +18,9 @@ The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_
 
 **Attempt workflow.** `attempt_workflows` lists every allowed state change and who may make it (`reviewed` is locked except for an admin appeal; `voided` is final). Python publishes the table; our Go backend must enforce it on every attempt write, in the same transaction.
 
-The old `GET /catalog` is removed. `POST /assessment/plan` is replaced by `POST /internal/v1/learning-plans`, which takes reviewed scores only, never CV claims. The chatbot endpoint arrives in milestone 4.
+The old `GET /catalog` is removed. `POST /assessment/plan` is replaced by `POST /internal/v1/learning-plans`, which takes reviewed scores only, never CV claims.
 
-### Service authentication (Go must implement)
+### Service authentication (our Go backend must implement)
 Every `/internal/v1` request carries:
 
 ```
@@ -35,7 +35,7 @@ The secret is at least 32 bytes and comes from `AI_SERVICE_SHARED_SECRET` (in `.
 
 **Replay window.** A signed request stays valid for ±300 s and carries no nonce, so a captured request can be replayed inside that window. That is acceptable only because every endpoint today is a pure computation that stores nothing. Before any endpoint changes state, add a single-use nonce to the canonical string and a shared store to reject repeats.
 
-**Rotating the secret without downtime.** Python accepts `AI_SERVICE_SHARED_SECRET_PREVIOUS` alongside the current secret; Go always signs with the current one.
+**Rotating the secret without downtime.** Python accepts `AI_SERVICE_SHARED_SECRET_PREVIOUS` alongside the current secret; our Go backend always signs with the current one.
 1. Python: set `AI_SERVICE_SHARED_SECRET=<new>` and `AI_SERVICE_SHARED_SECRET_PREVIOUS=<old>`, deploy. Both now verify.
 2. Go: switch to `<new>`, deploy.
 3. Python: remove `AI_SERVICE_SHARED_SECRET_PREVIOUS`, deploy. `<old>` is now rejected.
@@ -60,7 +60,7 @@ Request (all fields required unless noted; unknown fields are rejected):
 ```json
 {
   "request_id": "uuid", "attempt_id": "uuid", "candidate_id": "uuid", "reviewer_id": "uuid",
-  "scenario_id": "CS-01-A", "scenario_version": "1.0.0", "rubric_version": "0.1.0",
+  "scenario_id": "CS-01-A", "scenario_version": "1.1.0", "rubric_version": "0.2.0",
   "dimensions": {
     "accuracy":      {"score": 3, "evidence": ["exact quote from an artifact"]},
     "judgment":      {"score": 3, "evidence": ["..."]},
@@ -85,7 +85,7 @@ Response 200:
 ```json
 {
   "request_id": "uuid", "attempt_id": "uuid", "scenario_id": "CS-01-A", "stage": "baseline",
-  "rubric": {"version": "0.1.0", "sha256": "..."}, "scenarios": {"version": "1.0.0", "sha256": "..."},
+  "rubric": {"version": "0.2.0", "sha256": "..."}, "scenarios": {"version": "1.1.0", "sha256": "..."},
   "result": {
     "dimensions": [{"id": "accuracy", "score": 3, "weight_bp": 3000, "weighted_points": 22.5}],
     "weighted_score": 82.5, "pilot_threshold": 75.0, "pilot_threshold_is_validated": false,

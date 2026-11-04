@@ -10,7 +10,7 @@ from praxis_assessment.errors import ContentError
 
 
 class KeySource(Protocol):
-    """Where the assessor keys for one scenario bank version come from. Returns the raw JSON document."""
+    """Where one version of a protected document comes from (assessor keys, held-out cases). Returns raw JSON."""
 
     def read(self, version: str) -> bytes | None: ...
 

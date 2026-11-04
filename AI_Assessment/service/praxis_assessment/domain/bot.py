@@ -6,8 +6,8 @@ from praxis_assessment.content.capstone import Capstone
 from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.capstone import BotConfig, BotTurn, words
 
-# Every reply says it comes from a bot. Customers who took an AI agent for a person is how invented
-# policies get believed.
+# Every reply says it comes from a bot. A customer who takes an AI agent for a person believes the
+# policies it invents.
 SPEAKER = "KoraDesk virtual assistant"
 ABSTAIN_REPLY = f"{SPEAKER}: I can't help with that here. You can ask for a person at any time."
 HANDOFF_REPLY = f"{SPEAKER}: I've asked a person from our team to help. I'll tell you as soon as they join."

@@ -117,7 +117,7 @@ async def compare(
     _caller: Annotated[Caller, Depends(require_caller("reviewer", "system"))],
     registry: Registry,
 ) -> CompareResponse:
-    # Both attempts must share these versions; compare_attempts refuses them otherwise.
+    # I look content up by the baseline's versions; compare_attempts refuses a final scored on others.
     rubric = registry.rubric(body.baseline.rubric_version)
     bank = registry.scenario_bank(body.baseline.scenario_version)
     baseline = _bound_scenario(bank.content, body.baseline.scenario_id, rubric.content.version)
