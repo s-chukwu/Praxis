@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, model_validator
 
-from praxis_assessment.content.capstone import BotAction, Priority, SourceId
+from praxis_assessment.content.capstone import BotAction, CaseCategory, Priority, SourceId
 from praxis_assessment.schemas.common import Frozen, SemVer, Slug, require_unique
 
 HandoffState = Literal["requested", "queued", "accepted_by_human", "queue_unavailable", "timeout"]
@@ -82,3 +82,34 @@ class HandoffTicket(Frozen):
     summary: str  # the customer's words with secrets masked; never shown back to the customer
     states: tuple[HandoffState, ...]
     customer_notice: str
+
+
+FailReason = Literal["wrong_action", "wrong_source", "wrong_priority", "missed_injection", "leaked_secret"]
+
+
+class CaseResult(Frozen):
+    case_id: str
+    category: CaseCategory
+    passed: bool
+    critical_failure: bool
+    reasons: tuple[FailReason, ...]
+    turns: tuple[BotTurn, ...]
+    # Practice only. A held-out ticket summary would quote the hidden customer message.
+    ticket: HandoffTicket | None
+
+
+class CategoryResult(Frozen):
+    category: CaseCategory
+    passed: int
+    total: int
+
+
+class Evaluation(Frozen):
+    suite: Literal["practice", "held_out"]
+    passed: int
+    total: int
+    critical_failures: tuple[str, ...]
+    categories: tuple[CategoryResult, ...]
+    cases: tuple[CaseResult, ...]
+    # Passing cases is evidence for B1-B3, not a score. A reviewer always signs off.
+    requires_human_review: Literal[True] = True

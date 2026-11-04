@@ -23,7 +23,7 @@ _SECRETS = (
     # 13-19 digits, optionally grouped by spaces or dashes: the shape of a payment card number.
     re.compile(r"\b\d(?:[ -]?\d){12,18}\b"),
     # The value after a word like "password" or "pin". Bounded \S+ keeps matching linear on long input.
-    re.compile(r"(?i)\b(password|passcode|pin|cvv|otp)\b(\s*(?:is|:|=)?\s*)\S{1,64}"),
+    re.compile(r"(?i)\b(password|passcode|pin|cvv|otp)\b(\s*(?:is|:|=)?\s*)(\S{1,64})"),
 )
 SUMMARY_LIMIT = 300
 
@@ -42,3 +42,8 @@ def hand_over(turn: BotTurn, messages: Sequence[str], queue: QueueOutcome) -> Ha
 def redact(text: str) -> str:
     text = _SECRETS[0].sub(MASK, text)
     return _SECRETS[1].sub(lambda m: f"{m.group(1)}{m.group(2)}{MASK}", text)
+
+
+def find_secrets(text: str) -> list[str]:
+    """The secret values themselves, so the evaluator can prove none of them came back out."""
+    return [m.group(0) for m in _SECRETS[0].finditer(text)] + [m.group(3) for m in _SECRETS[1].finditer(text)]
