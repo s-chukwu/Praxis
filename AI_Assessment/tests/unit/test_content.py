@@ -58,6 +58,14 @@ def _unknown_event(data: dict) -> None:
     data["keys"][0]["critical_events"][0]["event_type"] = "rude_tone"
 
 
+def _held_out_copies_practice(data: dict) -> None:
+    data["cases"][0]["messages"] = ["When do you open?"]
+
+
+def _held_out_unknown_source(data: dict) -> None:
+    data["cases"][0]["expect"]["source_id"] = "FAQ-NOPE"
+
+
 def _cycle(data: dict) -> None:
     next(c for c in data["courses"] if c["id"] == "M-ROLE")["prerequisites"] = ["M-VERIFY"]
 
@@ -106,6 +114,8 @@ def _mismatched_blueprint(data: dict) -> None:
         ("scenarios/1.0.0.json", _near_copy_twin, "overlap too much"),
         ("assessor_keys/1.0.0.json", _unkeyed_scenario, r"unkeyed \['CS-02-B'\]"),
         ("assessor_keys/1.0.0.json", _unknown_event, "unknown event rude_tone"),
+        ("capstone_held_out/1.0.0.json", _held_out_copies_practice, "H-01 is too close to practice case P-01"),
+        ("capstone_held_out/1.0.0.json", _held_out_unknown_source, "H-01 expects unknown source FAQ-NOPE"),
         ("curriculum/1.0.0.json", _cycle, "cycle"),
         ("curriculum/1.0.0.json", _challenge_with_prerequisites, "must have no prerequisites"),
         ("allocation_policy/1.0.0.json", _remediation_gap, r"missing \['C6'\]"),

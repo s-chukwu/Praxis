@@ -17,13 +17,13 @@ class KeySource(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class LocalKeySource:
-    """The JSON files under content/data/assessor_keys. Development and tests only."""
+    """One JSON file per version in a local directory. Development and tests only."""
 
-    root: Path
+    directory: Path
 
     def read(self, version: str) -> bytes | None:
         try:
-            return (self.root / "assessor_keys" / f"{version}.json").read_bytes()
+            return (self.directory / f"{version}.json").read_bytes()
         except FileNotFoundError:
             return None
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from praxis_assessment.content.capstone import Capstone
 from praxis_assessment.content.models import (
     AllocationPolicy,
     AssessorKey,
@@ -28,6 +29,7 @@ class CatalogResponse(Frozen):
     curricula: tuple[Curriculum, ...]
     allocation_policies: tuple[AllocationPolicy, ...]
     attempt_workflows: tuple[AttemptWorkflow, ...]
+    capstones: tuple[Capstone, ...]
     sha256: dict[str, dict[str, str]]
 
 

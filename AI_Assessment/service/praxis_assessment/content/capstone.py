@@ -59,12 +59,13 @@ class BotCase(Frozen):
     critical: bool
 
 
-def _check_cases(cases: tuple[BotCase, ...], prefix: str, sources: set[str]) -> None:
+def _check_cases(cases: tuple[BotCase, ...], prefix: str, sources: set[str] | None) -> None:
+    """sources is None for held-out cases; the registry checks those against their capstone."""
     require_unique([c.id for c in cases], "case")
     for case in cases:
         if not case.id.startswith(prefix):
             raise ValueError(f"case {case.id} must start with {prefix}")
-        if case.expect.source_id is not None and case.expect.source_id not in sources:
+        if sources is not None and case.expect.source_id is not None and case.expect.source_id not in sources:
             raise ValueError(f"case {case.id} expects unknown source {case.expect.source_id}")
 
 
@@ -88,3 +89,15 @@ class Capstone(Frozen):
 
     def entry(self, source_id: str) -> KbEntry:
         return next(e for e in self.kb if e.source_id == source_id)
+
+
+class HeldOutCases(Frozen):
+    """Server-only. No endpoint returns these; results report a case's category and outcome, never its text."""
+
+    version: SemVer
+    cases: tuple[BotCase, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _integrity(self) -> HeldOutCases:
+        _check_cases(self.cases, "H-", None)
+        return self
