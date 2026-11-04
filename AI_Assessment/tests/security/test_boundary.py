@@ -3,13 +3,17 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from praxis_assessment.api import create_app
-from praxis_assessment.config import Settings
-from support import REVIEWER, SECRET, plan_payload, score_payload, signed_headers
+from praxis_assessment.api.examples import COMPARE_EXAMPLES
+from praxis_assessment.config import DEFAULT_CONTENT_DIR, KeyVaultSettings, Settings
+from praxis_assessment.content import load_registry
+from praxis_assessment.content.keys import MappedKeySource
+from support import REVIEWER, REVIEWER_ID, SECRET, plan_payload, score_payload, signed_headers
 
 SCORE = "/internal/v1/diagnostics/score"
 PLANS = "/internal/v1/learning-plans"
@@ -92,6 +96,71 @@ def test_reviewer_cannot_score_under_another_reviewers_id(call) -> None:
     assert response.status_code == 403
 
 
+def test_reviewer_cannot_score_their_own_attempt(call) -> None:
+    response = call("POST", SCORE, score_payload(candidate_id=str(REVIEWER_ID)), actor=REVIEWER)
+    assert response.status_code == 403
+    assert response.json()["error"]["message"] == "a reviewer cannot score their own attempt"
+
+
+PACKET = "/internal/v1/scenarios/CS-03-A/assessor-packet?version=1.1.0"
+KEY_TEXT = [
+    text
+    for keys in load_registry(DEFAULT_CONTENT_DIR).assessor_keys.values()
+    for key in keys.content.keys
+    for text in (*key.checks, *(e.when for e in key.critical_events))
+]
+
+
+@pytest.mark.parametrize("actor", [f"candidate:{uuid.uuid4()}", "system"])
+def test_assessor_packet_is_reviewer_and_admin_only(call, actor: str) -> None:
+    response = call("GET", PACKET, actor=actor)
+    assert response.status_code == 403
+    assert not any(text in response.text for text in KEY_TEXT)
+
+
+@pytest.mark.parametrize("actor", [REVIEWER, f"admin:{uuid.uuid4()}"])
+def test_assessor_packet_reaches_reviewers_uncached(call, actor: str) -> None:
+    response = call("GET", PACKET, actor=actor)
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert any(text in response.text for text in KEY_TEXT)  # proves the leak checks above can see a leak
+    assert response.json()["key"]["critical_events"][0]["event_type"] == "missed_security_escalation"
+
+
+def test_no_assessor_key_text_reaches_a_candidate(call) -> None:  # A20
+    response = call("GET", "/internal/v1/catalog", actor=f"candidate:{uuid.uuid4()}")
+    assert response.status_code == 200
+    assert not any(text in response.text for text in KEY_TEXT)
+
+
+def test_error_responses_are_not_cacheable(client: TestClient) -> None:
+    assert client.post(SCORE, json=score_payload()).headers["Cache-Control"] == "no-store"
+
+
+COMPARE = "/internal/v1/diagnostics/compare"
+
+
+@pytest.mark.parametrize("actor", [f"candidate:{uuid.uuid4()}", f"admin:{uuid.uuid4()}"])
+def test_only_reviewers_and_system_may_compare(call, actor: str) -> None:
+    assert call("POST", COMPARE, COMPARE_EXAMPLES["improved"]["value"], actor=actor).status_code == 403
+
+
+def test_compare_across_rubric_versions_is_409(call) -> None:  # A18, through the real route
+    payload = COMPARE_EXAMPLES["improved"]["value"]
+    payload = payload | {"final": payload["final"] | {"scenario_version": "1.0.0", "rubric_version": "0.1.0"}}
+    response = call("POST", COMPARE, payload, actor="system")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "not_comparable"
+
+
+def test_compare_refuses_an_unreviewed_attempt(call) -> None:
+    payload = COMPARE_EXAMPLES["improved"]["value"]
+    payload = payload | {"final": payload["final"] | {"state": "under_review"}}
+    response = call("POST", COMPARE, payload, actor="system")
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["state"] == "under_review"
+
+
 NEW_SECRET = b"rotated-secret-also-at-least-32-bytes-long"
 
 
@@ -160,8 +229,64 @@ def test_short_secret_refuses_to_start() -> None:
         Settings.from_env({"AI_SERVICE_SHARED_SECRET": "short"})
 
 
-def test_production_hides_interactive_docs() -> None:
-    client = TestClient(create_app(Settings(env="production", shared_secret=SECRET)))
+VAULT = KeyVaultSettings("https://praxis-kv-26c0.vault.azure.net/", "assessor-keys", str(uuid.uuid4()))
+VAULT_ENV = {
+    "PRAXIS_ENV": "production",
+    "AI_SERVICE_SHARED_SECRET": SECRET.decode(),
+    "AZURE_KEY_VAULT_URL": VAULT.url,
+    "ASSESSOR_KEYS_SECRET_NAME": VAULT.secret_name,
+    "AZURE_CLIENT_ID": VAULT.client_id,
+}
+
+
+@pytest.fixture
+def production_app(monkeypatch: pytest.MonkeyPatch, content_dir: Path):
+    """Production settings with the vault replaced by the shipped keys, and the local key files deleted."""
+    shipped = {p.stem: p.read_bytes() for p in (content_dir / "assessor_keys").glob("*.json")}
+    for path in (content_dir / "assessor_keys").glob("*.json"):
+        path.unlink()
+    requested: list[KeyVaultSettings] = []
+
+    def fake_vault(url: str, secret_name: str, client_id: str) -> MappedKeySource:
+        requested.append(KeyVaultSettings(url, secret_name, client_id))
+        return MappedKeySource(shipped)
+
+    monkeypatch.setattr("praxis_assessment.api.vault_key_source", fake_vault)
+    settings = Settings(env="production", shared_secret=SECRET, content_dir=content_dir, key_vault=VAULT)
+    return TestClient(create_app(settings)), requested
+
+
+def test_production_reads_keys_from_the_vault_never_the_image(production_app) -> None:
+    client, requested = production_app
+    assert requested == [VAULT]
+    response = client.get(PACKET, headers=signed_headers("GET", PACKET, b""))
+    assert response.status_code == 200
+
+
+def test_production_without_key_vault_refuses_to_start() -> None:
+    env = {k: v for k, v in VAULT_ENV.items() if not k.startswith(("AZURE_", "ASSESSOR_"))}
+    with pytest.raises(ValueError, match="AZURE_CLIENT_ID are required when PRAXIS_ENV=production"):
+        Settings.from_env(env)
+
+
+@pytest.mark.parametrize("missing", ["AZURE_KEY_VAULT_URL", "ASSESSOR_KEYS_SECRET_NAME", "AZURE_CLIENT_ID"])
+def test_partly_configured_key_vault_refuses_to_start(missing: str) -> None:
+    env = {k: v for k, v in VAULT_ENV.items() if k != missing}
+    with pytest.raises(ValueError, match=f"partly configured; also set {missing}"):
+        Settings.from_env(env | {"PRAXIS_ENV": "local"})
+
+
+def test_key_vault_url_must_be_https() -> None:
+    with pytest.raises(ValueError, match="https"):
+        Settings.from_env(VAULT_ENV | {"AZURE_KEY_VAULT_URL": "http://praxis-kv-26c0.vault.azure.net/"})
+
+
+def test_full_vault_settings_load_from_the_environment() -> None:
+    assert Settings.from_env(VAULT_ENV).key_vault == VAULT
+
+
+def test_production_hides_interactive_docs(production_app) -> None:
+    client, _ = production_app
     assert client.get("/docs").status_code == 404
     assert client.get("/openapi.json").status_code == 404
 

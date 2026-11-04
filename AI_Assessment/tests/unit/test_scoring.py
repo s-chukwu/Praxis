@@ -113,6 +113,24 @@ def test_unknown_critical_event_type_is_rejected() -> None:
     assert exc.value.details["unknown"] == ["bad_vibes"]
 
 
+def test_missed_account_takeover_vetoes_under_rubric_0_2_0() -> None:
+    rubric = REGISTRY.rubric("0.2.0").content
+    scenario = REGISTRY.scenario_bank("1.1.0").content.scenario("CS-01-A")
+    payload = with_scores(accuracy=4, judgment=4, safety=4, communication=4) | {
+        "scenario_version": "1.1.0",
+        "rubric_version": "0.2.0",
+        "critical_findings": [finding("confirmed", event="missed_security_escalation")],
+    }
+    result = score_attempt(rubric, scenario, ScoreRequest.model_validate(payload))
+    assert result.critical_veto is True
+    assert result.proposed_outcome == "needs_practice"
+
+
+def test_rubric_0_1_0_still_rejects_the_new_event() -> None:  # A18: old attempts keep their rubric
+    with pytest.raises(InvalidInput):
+        run(score_payload(critical_findings=[finding("confirmed", event="missed_security_escalation")]))
+
+
 def test_quote_absent_from_artifacts_holds_for_review() -> None:
     payload = score_payload()
     payload["dimensions"]["accuracy"]["evidence"] = ["Refund confirmed."]

@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
 from pydantic import BaseModel, ValidationError
 
+from praxis_assessment.content.keys import KeySource, LocalKeySource
 from praxis_assessment.content.models import (
     AllocationPolicy,
+    AssessorKeys,
+    AttemptWorkflow,
     CurrentPins,
     Curriculum,
     RoleStandard,
@@ -48,6 +51,24 @@ def _load_kind[T: BaseModel](root: Path, kind: str, model: type[T]) -> Mapping[s
     return MappingProxyType(loaded)
 
 
+def _load_keys(source: KeySource, versions: Iterable[str]) -> Mapping[str, Versioned[AssessorKeys]]:
+    loaded: dict[str, Versioned[AssessorKeys]] = {}
+    for version in versions:
+        raw = source.read(version)
+        if raw is None:
+            raise ContentError(f"no assessor keys for scenario bank {version}")
+        try:
+            keys = AssessorKeys.model_validate_json(raw)
+        except ValidationError as exc:
+            # Pydantic's message quotes the offending input, and the input here is the answer key.
+            problems = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+            raise ContentError(f"assessor keys for scenario bank {version} are invalid: {problems}") from None
+        if keys.version != version:
+            raise ContentError(f"assessor keys for scenario bank {version} declare version {keys.version}")
+        loaded[version] = Versioned(keys, _content_hash(keys))
+    return MappingProxyType(loaded)
+
+
 # There is no "latest" fallback. An attempt names its versions, and one that isn't loaded is a 409.
 def _lookup[T: BaseModel](items: Mapping[str, Versioned[T]], kind: str, version: str) -> Versioned[T]:
     try:
@@ -66,6 +87,8 @@ class ContentRegistry:
     scenario_banks: Mapping[str, Versioned[ScenarioBank]]
     curricula: Mapping[str, Versioned[Curriculum]]
     allocation_policies: Mapping[str, Versioned[AllocationPolicy]]
+    assessor_keys: Mapping[str, Versioned[AssessorKeys]]
+    attempt_workflows: Mapping[str, Versioned[AttemptWorkflow]]
     current: CurrentPins
 
     def role_standard(self, version: str) -> Versioned[RoleStandard]:
@@ -77,6 +100,12 @@ class ContentRegistry:
     def scenario_bank(self, version: str) -> Versioned[ScenarioBank]:
         return _lookup(self.scenario_banks, "scenarios", version)
 
+    def assessor_key_set(self, version: str) -> Versioned[AssessorKeys]:
+        return _lookup(self.assessor_keys, "assessor_keys", version)
+
+    def attempt_workflow(self, version: str) -> Versioned[AttemptWorkflow]:
+        return _lookup(self.attempt_workflows, "attempt_workflow", version)
+
     def curriculum(self, version: str) -> Versioned[Curriculum]:
         return _lookup(self.curricula, "curriculum", version)
 
@@ -84,18 +113,22 @@ class ContentRegistry:
         return _lookup(self.allocation_policies, "allocation_policy", version)
 
 
-def load_registry(root: Path) -> ContentRegistry:
+def load_registry(root: Path, keys: KeySource | None = None) -> ContentRegistry:
     try:
         current = CurrentPins.model_validate_json((root / "current.json").read_bytes())
     except (OSError, ValidationError) as exc:
         raise ContentError(f"current.json: {exc}") from exc
 
+    scenario_banks = _load_kind(root, "scenarios", ScenarioBank)
     registry = ContentRegistry(
         role_standards=_load_kind(root, "role_standard", RoleStandard),
         rubrics=_load_kind(root, "rubric", Rubric),
-        scenario_banks=_load_kind(root, "scenarios", ScenarioBank),
+        scenario_banks=scenario_banks,
         curricula=_load_kind(root, "curriculum", Curriculum),
         allocation_policies=_load_kind(root, "allocation_policy", AllocationPolicy),
+        # Keys are fetched per scenario bank, so every bank has exactly one key set by construction.
+        assessor_keys=_load_keys(keys or LocalKeySource(root), scenario_banks.keys()),
+        attempt_workflows=_load_kind(root, "attempt_workflow", AttemptWorkflow),
         current=current,
     )
     _check_references(registry)
@@ -120,6 +153,9 @@ def _check_references(reg: ContentRegistry) -> None:
             if unknown := set(scenario.competencies) - codes:
                 raise ContentError(f"scenarios {version}/{scenario.id} names unknown competencies {sorted(unknown)}")
 
+    for version, keys in reg.assessor_keys.items():
+        _check_keys(reg, version, keys.content)
+
     known_codes = frozenset().union(*(s.content.codes for s in reg.role_standards.values()))
     for version, curriculum in reg.curricula.items():
         for course in curriculum.content.courses:
@@ -136,6 +172,7 @@ def _check_references(reg: ContentRegistry) -> None:
         reg.scenario_bank(pins.scenarios)
         reg.curriculum(pins.curriculum)
         reg.allocation_policy(pins.allocation_policy)
+        reg.attempt_workflow(pins.attempt_workflow)
     except UnsupportedVersion as exc:
         raise ContentError(f"current.json pins a missing version: {exc.message}") from exc
 
@@ -172,3 +209,18 @@ def _check_policy(reg: ContentRegistry, version: str, policy: AllocationPolicy) 
     # I always place the challenge last, so it must not carry prerequisites of its own.
     if courses[policy.challenge_module].prerequisites:
         raise ContentError(f"{where} challenge module {policy.challenge_module} must have no prerequisites")
+
+
+def _check_keys(reg: ContentRegistry, version: str, keys: AssessorKeys) -> None:
+    scenarios = {s.id: s for s in reg.scenario_banks[version].content.scenarios}
+    keyed = {k.scenario_id for k in keys.keys}
+    if keyed != scenarios.keys():
+        raise ContentError(
+            f"assessor_keys {version} must key every scenario exactly: "
+            f"unkeyed {sorted(scenarios.keys() - keyed)}, unknown {sorted(keyed - scenarios.keys())}"
+        )
+    for key in keys.keys:
+        allowed = reg.rubrics[scenarios[key.scenario_id].rubric_version].content.critical_event_types
+        for event in key.critical_events:
+            if event.event_type not in allowed:
+                raise ContentError(f"assessor_keys {version}/{key.scenario_id} uses unknown event {event.event_type}")

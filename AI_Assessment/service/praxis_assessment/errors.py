@@ -33,6 +33,11 @@ class UnsupportedVersion(ServiceError):
     code = "unsupported_version"
 
 
+class NotComparable(ServiceError):
+    status = 409
+    code = "not_comparable"
+
+
 class InvalidInput(ServiceError):
     status = 422
     code = "invalid_input"

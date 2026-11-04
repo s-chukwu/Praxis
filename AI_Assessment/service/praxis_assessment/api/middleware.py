@@ -37,7 +37,10 @@ class RequestContextMiddleware:
             nonlocal status
             if message["type"] == "http.response.start":
                 status = message["status"]
-                MutableHeaders(scope=message).append(REQUEST_ID_HEADER, request_id)
+                headers = MutableHeaders(scope=message)
+                headers.append(REQUEST_ID_HEADER, request_id)
+                # Every response here carries candidate evidence or assessor keys; no proxy or browser may keep it.
+                headers["Cache-Control"] = "no-store"
             await send(message)
 
         try:

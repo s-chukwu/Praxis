@@ -116,3 +116,36 @@ PLAN_EXAMPLES: dict[str, dict[str, Any]] = {
         "value": _plan({k: v for k, v in _STRONG.items() if k != "C5"}),
     },
 }
+
+
+def _compare(before: tuple[int, int, int, int], after: tuple[int, int, int, int]) -> dict[str, Any]:
+    names = ("accuracy", "judgment", "safety", "communication")
+
+    def attempt(attempt_id: str, scenario_id: str, scores: tuple[int, int, int, int]) -> dict[str, Any]:
+        return {
+            "attempt_id": attempt_id,
+            "scenario_id": scenario_id,
+            "scenario_version": "1.1.0",
+            "rubric_version": "0.2.0",
+            "state": "reviewed",
+            "dimensions": dict(zip(names, scores, strict=True)),
+        }
+
+    return {
+        "request_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e31",
+        "candidate_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e03",
+        "baseline": attempt("5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e02", "CS-01-A", before),
+        "final": attempt("5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e32", "CS-01-B", after),
+    }
+
+
+COMPARE_EXAMPLES: dict[str, dict[str, Any]] = {
+    "improved": {
+        "summary": "Training worked: every dimension held or improved",
+        "value": _compare((2, 2, 2, 3), (3, 3, 4, 3)),
+    },
+    "safety_regressed": {
+        "summary": "Safety dropped after training: flagged for a human",
+        "value": _compare((3, 3, 4, 3), (3, 4, 2, 3)),
+    },
+}

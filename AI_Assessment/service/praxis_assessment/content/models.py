@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import heapq
-from typing import Annotated, Literal
+import re
+from fractions import Fraction
+from typing import Annotated, Literal, get_args
 
 from pydantic import Field, PrivateAttr, StringConstraints, model_validator
 
 from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.common import (
+    ActorRole,
     CompetencyCode,
     Frozen,
     ScenarioId,
@@ -18,6 +21,9 @@ from praxis_assessment.schemas.common import (
 Track = Literal["operator", "builder"]
 Stage = Literal["baseline", "final", "practice", "security_regression"]
 CourseId = Annotated[str, StringConstraints(pattern=r"^M-[A-Z-]+$")]
+
+# Pilot value, not validated. Shipped twins share no three-word run at all, so this only trips on a near copy.
+MAX_TWIN_OVERLAP = Fraction(3, 10)
 
 
 class Competency(Frozen):
@@ -110,8 +116,9 @@ class ScenarioBank(Frozen):
                 raise ValueError(f"{s.id}: parallel form is missing or not reciprocal")
             if set(twin.competencies) != set(s.competencies) or twin.pair != s.pair:
                 raise ValueError(f"{s.id} and {twin.id} do not share a blueprint")
-            if twin.candidate_brief == s.candidate_brief:
-                raise ValueError(f"{s.id} and {twin.id} have identical briefs")
+            # Twins that read alike let a candidate carry a baseline answer into the final.
+            if brief_overlap(twin.candidate_brief, s.candidate_brief) > MAX_TWIN_OVERLAP:
+                raise ValueError(f"{s.id} and {twin.id} briefs overlap too much to be parallel forms")
         return self
 
     def scenario(self, scenario_id: str) -> Scenario:
@@ -122,6 +129,45 @@ class ScenarioBank(Frozen):
             f"scenario {scenario_id} is not in scenario bank {self.version}",
             details={"scenario_id": scenario_id, "scenario_version": self.version},
         )
+
+
+def brief_overlap(a: str, b: str) -> Fraction:
+    """Jaccard similarity of lower-cased three-word runs."""
+    runs_a, runs_b = _word_runs(a), _word_runs(b)
+    union = runs_a | runs_b
+    return Fraction(len(runs_a & runs_b), len(union)) if union else Fraction(1)
+
+
+def _word_runs(text: str) -> set[tuple[str, ...]]:
+    words = re.findall(r"\w+", text.lower())
+    return {tuple(words[i : i + 3]) for i in range(len(words) - 2)}
+
+
+class CriticalEvent(Frozen):
+    event_type: Slug
+    when: str
+
+
+class AssessorKey(Frozen):
+    scenario_id: ScenarioId
+    checks: tuple[str, ...] = Field(min_length=1)
+    critical_events: tuple[CriticalEvent, ...]
+
+
+# I keep keys out of ScenarioBank on purpose: the catalog serialises the bank, and a key that is not
+# in the model cannot leak through it. The version matches the scenario bank it grades.
+class AssessorKeys(Frozen):
+    version: SemVer
+    keys: tuple[AssessorKey, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _integrity(self) -> AssessorKeys:
+        require_unique([k.scenario_id for k in self.keys], "assessor key")
+        return self
+
+    def key(self, scenario_id: str) -> AssessorKey:
+        # The registry guarantees one key per scenario, so a scenario that resolved always has one.
+        return next(k for k in self.keys if k.scenario_id == scenario_id)
 
 
 class Course(Frozen):
@@ -198,6 +244,45 @@ class AllocationPolicy(Frozen):
     remediation: dict[CompetencyCode, tuple[CourseId, ...]]
 
 
+AttemptState = Literal["assigned", "in_progress", "submitted", "under_review", "review_pending", "reviewed", "voided"]
+
+
+class Transition(Frozen):
+    source: AttemptState
+    target: AttemptState
+    roles: tuple[ActorRole, ...] = Field(min_length=1)
+
+
+# Our Go backend enforces this table when it writes an attempt; I publish it so both sides read one source.
+class AttemptWorkflow(Frozen):
+    version: SemVer
+    initial: AttemptState
+    transitions: tuple[Transition, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _integrity(self) -> AttemptWorkflow:
+        require_unique([f"{t.source}->{t.target}" for t in self.transitions], "transition")
+        for t in self.transitions:
+            require_unique(t.roles, f"role on {t.source}->{t.target}")
+            if t.source == t.target:
+                raise ValueError(f"{t.source} cannot transition to itself")
+            if t.source == "voided":
+                raise ValueError("voided is final")
+        reached, frontier = {self.initial}, [self.initial]
+        while frontier:
+            state = frontier.pop()
+            for t in self.transitions:
+                if t.source == state and t.target not in reached:
+                    reached.add(t.target)
+                    frontier.append(t.target)
+        if unreachable := sorted(set(get_args(AttemptState)) - reached):
+            raise ValueError(f"states unreachable from {self.initial}: {unreachable}")
+        return self
+
+    def allows(self, source: str, target: str, role: str) -> bool:
+        return any(t.source == source and t.target == target and role in t.roles for t in self.transitions)
+
+
 class CurrentPins(Frozen):
     """Versions our Go backend should use for new attempts. Old attempts keep the versions they were created with."""
 
@@ -206,3 +291,4 @@ class CurrentPins(Frozen):
     scenarios: SemVer
     curriculum: SemVer
     allocation_policy: SemVer
+    attempt_workflow: SemVer
