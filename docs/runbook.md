@@ -132,6 +132,8 @@ az keyvault list -g praxis-rg -o table
 
 Do not commit key material to the repo.
 
+Production reads two secrets from Key Vault: `assessor-keys` and `capstone-held-out`. Both are JSON objects keyed by version. Local dev reads the copies under `AI_Assessment/tests/fixtures` through `PRAXIS_PROTECTED_CONTENT_DIR`, mounted read-only by `docker-compose.yml`.
+
 ## Known constraints
 
 - The Container Apps environment is **express**. It has no VNet, and it does not support Key Vault secret references in Container Apps config.
