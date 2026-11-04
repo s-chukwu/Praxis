@@ -37,9 +37,29 @@ cd AI_Assessment/service && pip install -r requirements.txt && uvicorn main:app 
 cd frontend && npm install && npm run dev
 ```
 
+## Deployment
+
+Production runs on Azure Container Apps in `praxis-rg`. Merging to `main` builds and deploys all three services automatically through the Release workflow.
+
+| Service | URL |
+|---|---|
+| Web | https://praxis-web.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
+| Backend | https://praxis-backend.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
+| AI | internal ingress, HMAC required |
+
+Verify a deployment:
+
+```bash
+./scripts/smoke.sh
+```
+
+Deploy, rollback, and scaling steps are in `docs/runbook.md`. The system diagram is in `docs/architecture.md`.
+
 ## Docs
 
 - `docs/scope.md` - scope freeze
+- `docs/runbook.md` - deploy, rollback, and scaling
+- `docs/architecture.md` - system and deploy diagrams
 - `AI_Assessment/docs/rubric.md` - assessment rubric
 - `AI_Assessment/docs/scenario.md` - scenario bank
 - `AI_Assessment/docs/integration_contract.md` - Go ↔ Python contract
