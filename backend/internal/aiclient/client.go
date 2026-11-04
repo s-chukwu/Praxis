@@ -69,11 +69,17 @@ func (c *Client) Catalog(ctx context.Context, actor Actor, requestID string) (js
 
 // ScoreDiagnostic calls POST /internal/v1/diagnostics/score (reviewer only).
 func (c *Client) ScoreDiagnostic(ctx context.Context, actor Actor, requestID string, req any) (json.RawMessage, error) {
+	if err := requireActor(actor, "reviewer"); err != nil {
+		return nil, err
+	}
 	return c.do(ctx, http.MethodPost, "/internal/v1/diagnostics/score", actor, requestID, req)
 }
 
 // LearningPlan calls POST /internal/v1/learning-plans (reviewer or system).
 func (c *Client) LearningPlan(ctx context.Context, actor Actor, requestID string, req any) (json.RawMessage, error) {
+	if err := requireActor(actor, "reviewer", "system"); err != nil {
+		return nil, err
+	}
 	return c.do(ctx, http.MethodPost, "/internal/v1/learning-plans", actor, requestID, req)
 }
 
