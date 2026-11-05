@@ -169,7 +169,7 @@ def test_keys_come_from_the_given_source_not_the_local_files(content_dir: Path) 
     for local in (content_dir / "assessor_keys").glob("*.json"):
         local.unlink()
     registry = load_registry(content_dir, source)
-    assert sorted(source.requested) == ["1.0.0", "1.1.0"]
+    assert sorted(source.requested) == ["1.0.0", "1.1.0", "1.2.0"]
     assert registry.assessor_key_set("1.1.0").content.version == "1.1.0"
 
 
