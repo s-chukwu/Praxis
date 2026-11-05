@@ -34,7 +34,7 @@ def test_catalog_lists_versions_hashes_and_current_pins(call) -> None:
     assert body["current"] == {
         "role_standard": "1.0.0",
         "rubric": "0.2.0",
-        "scenarios": "1.1.0",
+        "scenarios": "1.2.0",
         "curriculum": "1.0.0",
         "allocation_policy": "1.0.0",
         "attempt_workflow": "1.0.0",
