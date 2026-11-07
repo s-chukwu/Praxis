@@ -5,11 +5,10 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.content.models import AttemptWorkflow
+from support import fixture_registry
 
-WORKFLOW = load_registry(DEFAULT_CONTENT_DIR).attempt_workflow("1.0.0").content
+WORKFLOW = fixture_registry().attempt_workflow("1.0.0").content
 STATES = ["assigned", "in_progress", "submitted", "under_review", "review_pending", "reviewed", "voided"]
 ROLES = ["candidate", "system", "reviewer", "admin"]
 

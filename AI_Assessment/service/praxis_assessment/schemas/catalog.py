@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from praxis_assessment.content.capstone import Capstone
 from praxis_assessment.content.models import (
     AllocationPolicy,
     AssessorKey,
@@ -17,8 +18,8 @@ from praxis_assessment.schemas.common import ContentRef, Frozen
 class CatalogResponse(Frozen):
     """Every loaded version, so our Go backend can render historical attempts against the content they used.
 
-    Scenario banks carry candidate-visible briefs only; assessor checklists are not part of the
-    content model, so they cannot leak through here.
+    Assessor keys and held-out capstone cases are separate models that this response has no field for,
+    so they cannot leak through here.
     """
 
     current: CurrentPins
@@ -28,6 +29,7 @@ class CatalogResponse(Frozen):
     curricula: tuple[Curriculum, ...]
     allocation_policies: tuple[AllocationPolicy, ...]
     attempt_workflows: tuple[AttemptWorkflow, ...]
+    capstones: tuple[Capstone, ...]
     sha256: dict[str, dict[str, str]]
 
 

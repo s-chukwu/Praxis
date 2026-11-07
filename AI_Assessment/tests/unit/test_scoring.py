@@ -6,14 +6,12 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.domain.scoring import score_attempt
 from praxis_assessment.errors import InvalidInput
 from praxis_assessment.schemas.scoring import MIN_QUOTE_CHARS, ScoreRequest, ScoreResult
-from support import score_payload, with_scores
+from support import fixture_registry, score_payload, with_scores
 
-REGISTRY = load_registry(DEFAULT_CONTENT_DIR)
+REGISTRY = fixture_registry()
 RUBRIC = REGISTRY.rubric("0.1.0").content
 SCENARIO = REGISTRY.scenario_bank("1.0.0").content.scenario("CS-01-A")
 

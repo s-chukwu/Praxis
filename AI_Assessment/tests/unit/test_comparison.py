@@ -5,13 +5,12 @@ from typing import Any
 
 import pytest
 
-from praxis_assessment.config import DEFAULT_CONTENT_DIR
-from praxis_assessment.content import load_registry
 from praxis_assessment.domain.comparison import compare_attempts
 from praxis_assessment.errors import InvalidInput, NotComparable
 from praxis_assessment.schemas.comparison import CompareRequest, Comparison
+from support import fixture_registry
 
-REGISTRY = load_registry(DEFAULT_CONTENT_DIR)
+REGISTRY = fixture_registry()
 RUBRIC = REGISTRY.rubric("0.2.0").content
 BANK = REGISTRY.scenario_bank("1.1.0").content
 

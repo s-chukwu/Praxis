@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import time
 import uuid
@@ -8,7 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from praxis_assessment.api.auth import ACTOR_HEADER, SIGNATURE_HEADER, TIMESTAMP_HEADER, sign_request
+from praxis_assessment.api.examples import CAREFUL_BOT_CONFIG
+from praxis_assessment.config import DEFAULT_CONTENT_DIR
+from praxis_assessment.content import ContentRegistry, load_registry
+from praxis_assessment.content.keys import LocalKeySource
 
+FIXTURES = Path(__file__).parent / "fixtures"
 SECRET = b"test-secret-that-is-at-least-32-bytes!!"
 REVIEWER_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
 REVIEWER = f"reviewer:{REVIEWER_ID}"
@@ -91,3 +97,17 @@ def plan_payload(scores: dict[str, int] | None = None, **overrides: Any) -> dict
     }
     payload.update(overrides)
     return payload
+
+
+
+def bot_config(**overrides: Any) -> dict[str, Any]:
+    """A careful candidate's KoraDesk bot, the same one /docs shows; overrides model weaker configs."""
+    return copy.deepcopy(CAREFUL_BOT_CONFIG) | overrides
+
+
+HELD_OUT_FIXTURES = LocalKeySource(FIXTURES / "capstone_held_out")
+
+
+def fixture_registry() -> ContentRegistry:
+    """The shipped content plus the dev copies of the protected files, as a local run would load it."""
+    return load_registry(DEFAULT_CONTENT_DIR, LocalKeySource(FIXTURES / "assessor_keys"), HELD_OUT_FIXTURES)

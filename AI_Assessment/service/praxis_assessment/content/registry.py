@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
 from pydantic import BaseModel, ValidationError
 
+from praxis_assessment.content.capstone import Capstone, HeldOutCases
+from praxis_assessment.content.keys import KeySource, LocalKeySource
 from praxis_assessment.content.models import (
+    MAX_TWIN_OVERLAP,
     AllocationPolicy,
     AssessorKeys,
     AttemptWorkflow,
@@ -18,6 +21,7 @@ from praxis_assessment.content.models import (
     RoleStandard,
     Rubric,
     ScenarioBank,
+    brief_overlap,
 )
 from praxis_assessment.errors import ContentError, UnsupportedVersion
 
@@ -28,7 +32,7 @@ class Versioned[T: BaseModel]:
     sha256: str
 
 
-def _content_hash(model: BaseModel) -> str:
+def content_hash(model: BaseModel) -> str:
     # I hash the canonical JSON, not the file bytes, so reformatting a file does not change its identity.
     canonical = json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -44,9 +48,31 @@ def _load_kind[T: BaseModel](root: Path, kind: str, model: type[T]) -> Mapping[s
         version = item.version  # type: ignore[attr-defined]
         if version != path.stem:
             raise ContentError(f"{kind}/{path.name} declares version {version}")
-        loaded[version] = Versioned(item, _content_hash(item))
+        loaded[version] = Versioned(item, content_hash(item))
     if not loaded:
         raise ContentError(f"no {kind} content in {root / kind}")
+    return MappingProxyType(loaded)
+
+
+def _load_protected[T: BaseModel](
+    source: KeySource, versions: Iterable[str], model: type[T], what: str
+) -> Mapping[str, Versioned[T]]:
+    """Content that must never ship to a candidate: one document per version of the public content it grades."""
+    loaded: dict[str, Versioned[T]] = {}
+    for version in versions:
+        raw = source.read(version)
+        if raw is None:
+            raise ContentError(f"no {what} {version}")
+        try:
+            item = model.model_validate_json(raw)
+        except ValidationError as exc:
+            # Pydantic's message quotes the offending input, and the input here is an answer key.
+            problems = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+            raise ContentError(f"{what} {version} are invalid: {problems}") from None
+        declared = item.version  # type: ignore[attr-defined]
+        if declared != version:
+            raise ContentError(f"{what} {version} declare version {declared}")
+        loaded[version] = Versioned(item, content_hash(item))
     return MappingProxyType(loaded)
 
 
@@ -70,6 +96,8 @@ class ContentRegistry:
     allocation_policies: Mapping[str, Versioned[AllocationPolicy]]
     assessor_keys: Mapping[str, Versioned[AssessorKeys]]
     attempt_workflows: Mapping[str, Versioned[AttemptWorkflow]]
+    capstones: Mapping[str, Versioned[Capstone]]
+    held_out: Mapping[str, Versioned[HeldOutCases]]
     current: CurrentPins
 
     def role_standard(self, version: str) -> Versioned[RoleStandard]:
@@ -87,6 +115,12 @@ class ContentRegistry:
     def attempt_workflow(self, version: str) -> Versioned[AttemptWorkflow]:
         return _lookup(self.attempt_workflows, "attempt_workflow", version)
 
+    def capstone(self, version: str) -> Versioned[Capstone]:
+        return _lookup(self.capstones, "capstone", version)
+
+    def held_out_cases(self, version: str) -> Versioned[HeldOutCases]:
+        return _lookup(self.held_out, "capstone_held_out", version)
+
     def curriculum(self, version: str) -> Versioned[Curriculum]:
         return _lookup(self.curricula, "curriculum", version)
 
@@ -94,20 +128,35 @@ class ContentRegistry:
         return _lookup(self.allocation_policies, "allocation_policy", version)
 
 
-def load_registry(root: Path) -> ContentRegistry:
+def load_registry(root: Path, keys: KeySource | None = None, held_out: KeySource | None = None) -> ContentRegistry:
     try:
         current = CurrentPins.model_validate_json((root / "current.json").read_bytes())
     except (OSError, ValidationError) as exc:
         raise ContentError(f"current.json: {exc}") from exc
 
+    scenario_banks = _load_kind(root, "scenarios", ScenarioBank)
+    capstones = _load_kind(root, "capstone", Capstone)
     registry = ContentRegistry(
         role_standards=_load_kind(root, "role_standard", RoleStandard),
         rubrics=_load_kind(root, "rubric", Rubric),
-        scenario_banks=_load_kind(root, "scenarios", ScenarioBank),
+        scenario_banks=scenario_banks,
         curricula=_load_kind(root, "curriculum", Curriculum),
         allocation_policies=_load_kind(root, "allocation_policy", AllocationPolicy),
-        assessor_keys=_load_kind(root, "assessor_keys", AssessorKeys),
+        # Fetched per public version, so every scenario bank and capstone has exactly one protected document.
+        assessor_keys=_load_protected(
+            keys or LocalKeySource(root / "assessor_keys"),
+            scenario_banks,
+            AssessorKeys,
+            "assessor keys for scenario bank",
+        ),
         attempt_workflows=_load_kind(root, "attempt_workflow", AttemptWorkflow),
+        capstones=capstones,
+        held_out=_load_protected(
+            held_out or LocalKeySource(root / "capstone_held_out"),
+            capstones,
+            HeldOutCases,
+            "held-out cases for capstone",
+        ),
         current=current,
     )
     _check_references(registry)
@@ -132,10 +181,10 @@ def _check_references(reg: ContentRegistry) -> None:
             if unknown := set(scenario.competencies) - codes:
                 raise ContentError(f"scenarios {version}/{scenario.id} names unknown competencies {sorted(unknown)}")
 
-    if unpaired := sorted(reg.scenario_banks.keys() ^ reg.assessor_keys.keys()):
-        raise ContentError(f"scenario banks and assessor keys must come in pairs, unpaired versions {unpaired}")
     for version, keys in reg.assessor_keys.items():
         _check_keys(reg, version, keys.content)
+    for version, cases in reg.held_out.items():
+        _check_held_out(reg.capstones[version].content, cases.content)
 
     known_codes = frozenset().union(*(s.content.codes for s in reg.role_standards.values()))
     for version, curriculum in reg.curricula.items():
@@ -154,6 +203,7 @@ def _check_references(reg: ContentRegistry) -> None:
         reg.curriculum(pins.curriculum)
         reg.allocation_policy(pins.allocation_policy)
         reg.attempt_workflow(pins.attempt_workflow)
+        reg.capstone(pins.capstone)
     except UnsupportedVersion as exc:
         raise ContentError(f"current.json pins a missing version: {exc.message}") from exc
 
@@ -205,3 +255,15 @@ def _check_keys(reg: ContentRegistry, version: str, keys: AssessorKeys) -> None:
         for event in key.critical_events:
             if event.event_type not in allowed:
                 raise ContentError(f"assessor_keys {version}/{key.scenario_id} uses unknown event {event.event_type}")
+
+
+def _check_held_out(capstone: Capstone, held_out: HeldOutCases) -> None:
+    where = f"held-out cases for capstone {capstone.version}"
+    for case in held_out.cases:
+        if case.expect.source_id is not None and case.expect.source_id not in capstone.sources:
+            raise ContentError(f"{where}: {case.id} expects unknown source {case.expect.source_id}")
+        # A held-out case that reads like a practice case can be rehearsed, which defeats holding it out.
+        for practice in capstone.practice:
+            for message in case.messages:
+                if any(brief_overlap(message, seen) > MAX_TWIN_OVERLAP for seen in practice.messages):
+                    raise ContentError(f"{where}: {case.id} is too close to practice case {practice.id}")

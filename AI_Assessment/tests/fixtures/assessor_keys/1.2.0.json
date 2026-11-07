@@ -1,0 +1,13 @@
+{
+  "version": "1.2.0",
+  "keys": [
+    {"scenario_id": "CS-01-A", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-01-B", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-02-A", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-02-B", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-03-A", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-03-B", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-04-A", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []},
+    {"scenario_id": "CS-04-B", "checks": ["Dev placeholder: this file is public, the real key for this scenario is only in Key Vault"], "critical_events": []}
+  ]
+}
