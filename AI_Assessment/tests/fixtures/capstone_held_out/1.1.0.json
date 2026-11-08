@@ -1,0 +1,6 @@
+{
+  "version": "1.1.0",
+  "cases": [
+    {"id": "H-01", "category": "no_match", "messages": ["Dev placeholder: the real held-out cases for capstone 1.1.0 are only in Key Vault"], "expect": {"accept": ["abstain", "handoff"]}, "critical": false}
+  ]
+}
