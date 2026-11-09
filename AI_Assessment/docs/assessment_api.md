@@ -1,9 +1,9 @@
 # Python assessment service contract and integration guide
 
 ## Boundary
-`Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing and calls no model in milestones 1–4. DO NOT expose port 8000 publicly or use live applicant data.
+`Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing. Only `skills/suggest` calls an LLM (Gemini); everything else is deterministic. DO NOT expose port 8000 publicly or use live applicant data.
 
-## Implemented endpoints (milestones 1–4)
+## Implemented endpoints (milestones 1–5)
 The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_ENV=local`; it is disabled in production.
 
 | Method + path | Allowed actor | Purpose |
@@ -15,6 +15,7 @@ The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_
 | `POST /internal/v1/diagnostics/compare` | `reviewer` or `system` | per-dimension change from a reviewed baseline to its reviewed parallel final form; flags any regression for a human |
 | `POST /internal/v1/capstones/evaluate` | `candidate` (own `candidate_id`, `practice` only), `reviewer`, `system` | runs a candidate's bot config against the practice or held-out cases |
 | `POST /internal/v1/learning-plans` | `reviewer` or `system` | skills gaps, safety gate and prerequisite-ordered modules from reviewed scores |
+| `POST /internal/v1/skills/suggest` | `system` only | suggested competencies from CV text, each with a quote from the CV; the candidate confirms them |
 
 **Attempt workflow.** `attempt_workflows` lists every allowed state change and who may make it (`reviewed` is locked except for an admin appeal; `voided` is final). Python publishes the table; our Go backend must enforce it on every attempt write, in the same transaction.
 
@@ -130,6 +131,19 @@ The bot answers only with approved text, labels every reply as automated, never 
 - `practice` cases are public (also in `/catalog`); candidates may rerun them.
 - `held_out` cases are server-only. Results report case id, category and outcome but never the customer messages or tickets. Our Go backend starts this run once per locked attempt; candidates get 403.
 
+### POST /internal/v1/skills/suggest
+Call only after the candidate's `cv_analysis` consent is recorded; pass its id as `consent_ref`.
+
+```json
+{"request_id": "uuid", "candidate_id": "uuid", "consent_ref": "uuid", "role_standard_version": "1.0.0", "text": "plain CV text, max 20000 chars"}
+```
+
+Emails and long numbers (phones, ID numbers) are masked before the text goes to Gemini. The model returns competency codes with quotes; I keep a suggestion only if the code is in the role standard and the quote appears word for word in the CV, one per competency. The response lists `suggestions` (`competency`, `evidence_quote`, `confidence`, `status: "suggested"`), how many model items were `dropped`, and the `model` used. Suggestions are claims for the candidate to confirm: they never score, waive a course or reach `learning-plans`.
+
+- **Timeout:** an LLM call can take several seconds. Give this endpoint about 20 s and do not retry it; I already retry once inside.
+- **503 `model_unavailable`** (`details.reason`: `timeout`, `http_429`, `unusable_answer`, `not_configured`...): send the CV to manual review. Never treat it as "no skills".
+- Config: `GEMINI_API_KEY` (no key: always 503, the service still starts) and `GEMINI_MODEL` (default `gemini-2.5-flash`). CV text is never logged.
+
 ### POST /internal/v1/learning-plans
 Request (unknown fields, including `claimed_skills`, are rejected):
 
@@ -205,7 +219,7 @@ Every error has one shape: `{"error": {"code", "message", "request_id", "details
 | 422 | `invalid_request` | schema failure; `details.errors` gives `loc`, `msg`, `type` and never echoes input values |
 | 422 | `invalid_input` | valid JSON that breaks a rubric/scenario rule (missing dimension, unknown event type, unexpected artifact, unknown scenario) |
 | 503 | `service_auth_not_configured` | shared secret not set |
-| 429 / 503 | reserved | quota and model outage, from milestone 5 |
+| 503 | `model_unavailable` | skill suggestions: the LLM timed out, was rate limited, answered badly or has no key |
 
 Every response carries `Cache-Control: no-store`; it may hold candidate evidence or assessor keys.
 

@@ -42,4 +42,4 @@ Unauthenticated privileged grading, hidden keys in browser assets, raw CV in log
 
 ## Definition of implementation complete (future, not yet achieved)
 
-AI service passes local unit tests, exposes frozen OpenAPI, passes Go consumer contract tests and negative-security cases, produces replayable scoring/plan results, and has documented reviewer calibration. Today the service covers A01–A09 (A09 for tickets and bot messages), A11 and A13–A20 with automated tests; A09 for CV text, A10 and A12 arrive with the LLM and consent work, and Go consumer contract tests and reviewer calibration are still open.
+AI service passes local unit tests, exposes frozen OpenAPI, passes Go consumer contract tests and negative-security cases, produces replayable scoring/plan results, and has documented reviewer calibration. Today the service covers A01–A11 and A13–A20 with automated tests; A12 (consent revocation) sits with our Go backend, and Go consumer contract tests and reviewer calibration are still open.

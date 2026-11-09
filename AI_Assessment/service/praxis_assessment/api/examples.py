@@ -196,3 +196,19 @@ CAPSTONE_EXAMPLES: dict[str, dict[str, Any]] = {
         "value": _capstone("held_out", CAREFUL_BOT_CONFIG | {"rules": [], "handoff_after_failures": 5}),
     },
 }
+
+
+SKILLS_EXAMPLES: dict[str, dict[str, Any]] = {
+    "call_centre_cv": {
+        "summary": "A short CV; contact details are masked before the model sees it",
+        "value": {
+            "request_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e51",
+            "candidate_id": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e03",
+            "consent_ref": "5f0c2a7e-1d3b-4c8a-9e21-0a1b2c3d4e52",
+            "role_standard_version": "1.0.0",
+            "text": "Amari K. - amari.k@example.com - +250 788 000 111\n"
+            "Call centre agent, Kigali, 2022-2024. Handled 60 billing tickets a day.\n"
+            "Escalated suspected account takeovers to the security team.",
+        },
+    },
+}
