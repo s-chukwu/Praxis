@@ -43,6 +43,13 @@ class InvalidInput(ServiceError):
     code = "invalid_input"
 
 
+class ModelUnavailable(ServiceError):
+    """The LLM timed out, was rate limited or returned something unusable. Our Go backend falls back to a person."""
+
+    status = 503
+    code = "model_unavailable"
+
+
 class AuthNotConfigured(ServiceError):
     status = 503
     code = "service_auth_not_configured"

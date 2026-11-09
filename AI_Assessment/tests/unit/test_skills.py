@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from praxis_assessment.domain.skills import vet_suggestions
+from praxis_assessment.domain.skills import instructions_for, mask_contacts, vet_suggestions
 from support import fixture_registry
 
 STANDARD = fixture_registry().role_standard("1.0.0").content
@@ -36,3 +36,19 @@ def test_one_suggestion_per_competency_keeping_the_most_confident() -> None:
 def test_quotes_survive_whitespace_differences_only() -> None:
     kept, _ = vet_suggestions(STANDARD, CV, [item("C3", "call  centre.\n Escalated suspected")])
     assert len(kept) == 1
+
+
+def test_contact_details_are_masked_before_leaving_the_service() -> None:
+    text = "Mail amari.k+cv@gmail.com or +250 788 123 456. National ID 1199880012345678."
+    assert mask_contacts(text) == "Mail [email] or [number]. National ID [number]."
+
+
+def test_masking_keeps_the_evidence_a_skill_needs() -> None:
+    text = "Handled 60 tickets a day in 2023, order KD-5531, rated 4.8/5"
+    assert mask_contacts(text) == text
+
+
+def test_instructions_name_every_competency_and_never_contain_the_cv() -> None:
+    instructions = instructions_for(STANDARD)
+    assert all(f"{c.code}: {c.name}" in instructions for c in STANDARD.competencies)
+    assert "untrusted data" in instructions and "billing tickets" not in instructions  # A09: the CV travels apart
