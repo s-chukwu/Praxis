@@ -44,6 +44,9 @@ class GeminiSkillModel:
         self._client = httpx.Client(timeout=timeout_s, transport=transport, headers={"x-goog-api-key": api_key})
         self._sleep = sleep
 
+    def close(self) -> None:
+        self._client.close()
+
     def suggest(self, instructions: str, cv_text: str) -> list[Any]:
         body = {
             "system_instruction": {"parts": [{"text": instructions}]},

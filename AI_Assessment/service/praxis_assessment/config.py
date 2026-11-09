@@ -8,6 +8,7 @@ from typing import Literal
 
 DEFAULT_CONTENT_DIR = Path(__file__).parent / "content" / "data"
 MIN_SECRET_BYTES = 32
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 KEY_VAULT_ENV = ("AZURE_KEY_VAULT_URL", "AZURE_CLIENT_ID", "ASSESSOR_KEYS_SECRET_NAME", "CAPSTONE_HELD_OUT_SECRET_NAME")
 
 
@@ -39,6 +40,9 @@ class Settings:
     key_vault: KeyVaultSettings | None = None
     # Local runs only: a folder holding assessor_keys/ and capstone_held_out/. The image ships neither.
     protected_dir: Path | None = None
+    # Without a key, skill suggestions answer 503 and our Go backend routes CVs to manual review.
+    gemini_api_key: str | None = field(default=None, repr=False)
+    gemini_model: str = DEFAULT_GEMINI_MODEL
 
     def __post_init__(self) -> None:
         for name, secret in (
@@ -88,6 +92,8 @@ class Settings:
             previous_shared_secret=previous.encode() if previous else None,
             content_dir=Path(environ.get("PRAXIS_CONTENT_DIR", DEFAULT_CONTENT_DIR)),
             protected_dir=Path(protected) if (protected := environ.get("PRAXIS_PROTECTED_CONTENT_DIR")) else None,
+            gemini_api_key=environ.get("GEMINI_API_KEY") or None,
+            gemini_model=environ.get("GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
             key_vault=(
                 KeyVaultSettings(url, client_id, keys_secret, held_out_secret)
                 if url and client_id and keys_secret and held_out_secret

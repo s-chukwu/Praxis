@@ -7,7 +7,13 @@ from fastapi import APIRouter, Body, Depends, Query, Request
 from praxis_assessment import SERVICE_NAME, SERVICE_VERSION
 from praxis_assessment.api.auth import ALL_ROLES, Caller, require_caller
 from praxis_assessment.api.errors import ERROR_RESPONSES
-from praxis_assessment.api.examples import CAPSTONE_EXAMPLES, COMPARE_EXAMPLES, PLAN_EXAMPLES, SCORE_EXAMPLES
+from praxis_assessment.api.examples import (
+    CAPSTONE_EXAMPLES,
+    COMPARE_EXAMPLES,
+    PLAN_EXAMPLES,
+    SCORE_EXAMPLES,
+    SKILLS_EXAMPLES,
+)
 from praxis_assessment.content import ContentRegistry
 from praxis_assessment.content.models import Scenario, ScenarioBank
 from praxis_assessment.content.registry import content_hash
@@ -15,13 +21,16 @@ from praxis_assessment.domain.allocation import allocate
 from praxis_assessment.domain.capstone import evaluate
 from praxis_assessment.domain.comparison import compare_attempts
 from praxis_assessment.domain.scoring import score_attempt
-from praxis_assessment.errors import Forbidden, UnsupportedVersion
+from praxis_assessment.domain.skills import instructions_for, mask_contacts, vet_suggestions
+from praxis_assessment.errors import Forbidden, ModelUnavailable, UnsupportedVersion
+from praxis_assessment.llm import SkillModel
 from praxis_assessment.schemas.capstone import CapstoneRequest, CapstoneResponse
 from praxis_assessment.schemas.catalog import AssessorPacketResponse, CatalogResponse
 from praxis_assessment.schemas.common import ContentRef, ScenarioId, SemVer
 from praxis_assessment.schemas.comparison import CompareRequest, CompareResponse
 from praxis_assessment.schemas.learning_plan import LearningPlanRequest, LearningPlanResponse
 from praxis_assessment.schemas.scoring import ScoreRequest, ScoreResponse
+from praxis_assessment.schemas.skills import SkillsRequest, SkillsResponse, SkillsResult
 
 health_router = APIRouter()
 internal_router = APIRouter(prefix="/internal/v1", responses=ERROR_RESPONSES)
@@ -32,6 +41,10 @@ def get_registry(request: Request) -> ContentRegistry:
 
 
 Registry = Annotated[ContentRegistry, Depends(get_registry)]
+
+
+def get_skill_model(request: Request) -> SkillModel | None:
+    return request.app.state.skill_model
 
 
 @health_router.get("/health")
@@ -170,6 +183,31 @@ def _bound_scenario(bank: ScenarioBank, scenario_id: str, rubric_version: str) -
             details={"requested": rubric_version, "bound": scenario.rubric_version},
         )
     return scenario
+
+
+# A plain def on purpose: FastAPI runs it in a worker thread, so a slow LLM call never blocks other requests.
+@internal_router.post("/skills/suggest")
+def suggest_skills(
+    body: Annotated[SkillsRequest, Body(openapi_examples=SKILLS_EXAMPLES)],
+    _caller: Annotated[Caller, Depends(require_caller("system"))],
+    registry: Registry,
+    model: Annotated[SkillModel | None, Depends(get_skill_model)],
+) -> SkillsResponse:
+    standard = registry.role_standard(body.role_standard_version)
+    if model is None:
+        raise ModelUnavailable(
+            "skill suggestions are not configured; review the CV manually", details={"reason": "not_configured"}
+        )
+    sent = mask_contacts(body.text)
+    items = model.suggest(instructions_for(standard.content), sent)
+    suggestions, dropped = vet_suggestions(standard.content, sent, items)
+    return SkillsResponse(
+        request_id=body.request_id,
+        candidate_id=body.candidate_id,
+        consent_ref=body.consent_ref,
+        role_standard=ContentRef(version=standard.content.version, sha256=standard.sha256),
+        result=SkillsResult(suggestions=suggestions, dropped=dropped, model=model.name),
+    )
 
 
 @internal_router.post("/learning-plans")
