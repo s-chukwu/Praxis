@@ -38,7 +38,7 @@ def test_catalog_lists_versions_hashes_and_current_pins(call) -> None:
         "curriculum": "1.0.0",
         "allocation_policy": "1.0.0",
         "attempt_workflow": "1.0.0",
-        "capstone": "1.0.0",
+        "capstone": "1.1.0",
     }
     assert set(body["sha256"]) == {
         "role_standard", "rubric", "scenarios", "curriculum", "allocation_policy", "attempt_workflow",
