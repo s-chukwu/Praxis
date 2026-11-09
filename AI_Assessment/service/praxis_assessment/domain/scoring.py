@@ -91,26 +91,26 @@ def _events(findings: Iterable[CriticalFinding], decision: str) -> tuple[str, ..
     return tuple(sorted({f.event_type for f in findings if f.decision == decision}))
 
 
-def _normalize(text: str) -> str:
+def normalize(text: str) -> str:
     return _WHITESPACE.sub(" ", unicodedata.normalize("NFC", text)).strip()
 
 
 def _unverified_quotes(rubric: Rubric, request: ScoreRequest) -> tuple[EvidenceIssue, ...]:
     # A citation must appear in what the candidate actually submitted. I only forgive whitespace and
     # Unicode composition differences, never wording: a paraphrased quote is not evidence.
-    corpus = "\n".join(_normalize(a.text) for a in request.artifacts)
+    corpus = "\n".join(normalize(a.text) for a in request.artifacts)
     issues = [
         EvidenceIssue(source="dimension", ref=d.id, quote=quote, reason="not_found_in_artifacts")
         for d in rubric.dimensions
         for quote in request.dimensions[d.id].evidence
-        if _normalize(quote) not in corpus
+        if normalize(quote) not in corpus
     ]
     issues.extend(
         EvidenceIssue(
             source="critical_finding", ref=f.event_type, quote=f.supporting_quote, reason="not_found_in_artifacts"
         )
         for f in request.critical_findings
-        if _normalize(f.supporting_quote) not in corpus
+        if normalize(f.supporting_quote) not in corpus
     )
     return tuple(issues)
 
