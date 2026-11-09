@@ -181,6 +181,27 @@ Then deploy the matching content version, and check the AI startup log shows all
 
 After the new version is live, delete the old image versions so the old keys are not baked into any public image. Keep the current SHA and `latest`. Do not commit key material to the repo.
 
+## Environment variables
+
+Names only. Values are set in Azure, or in `.env` for local runs.
+
+| Service | Variable | Source |
+|---|---|---|
+| Backend | `SUPABASE_URL` | plain env |
+| Backend | `SUPABASE_ANON_KEY` | plain env |
+| Backend | `SUPABASE_SERVICE_ROLE_KEY` | Container Apps secret `supabase-service-role-key` |
+| Backend | `AI_SERVICE_URL` | plain env |
+| Backend | `AI_SERVICE_SHARED_SECRET` | Container Apps secret `ai-shared-secret` |
+| Backend | `CORS_ALLOWED_ORIGIN` | plain env |
+| AI | `AI_SERVICE_SHARED_SECRET` | Container Apps secret |
+| AI | `PRAXIS_ENV` | `production` |
+| AI | `AZURE_KEY_VAULT_URL` | plain env |
+| AI | `ASSESSOR_KEYS_SECRET_NAME` | `assessor-keys` |
+| AI | `CAPSTONE_HELD_OUT_SECRET_NAME` | `capstone-held-out` |
+| AI | `AZURE_CLIENT_ID` | managed identity client id |
+| Web | `API_INTERNAL_URL` | plain env |
+| Web | `NEXT_PUBLIC_API_URL` | plain env |
+
 ## Known constraints
 
 - The Container Apps environment is **express**. It has no VNet, and it does not support Key Vault secret references in Container Apps config.
