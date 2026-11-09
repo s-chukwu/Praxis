@@ -1,6 +1,6 @@
 # AI / Assessment service — integration boundary
 
-**Owner:** AI / Assessment Engineering. **Audience:** other teams integrating with this service. **Status:** `catalog`, `diagnostics/score`, `learning-plans` and `capstones/evaluate` are implemented; `skills/suggest` is still proposed. `assessment_api.md` is the implemented contract and wins where the two differ; the live schema is `/openapi.json` in local runs.
+**Owner:** AI / Assessment Engineering. **Audience:** other teams integrating with this service. **Status:** `catalog`, `diagnostics/score`, `learning-plans`, `capstones/evaluate` and `skills/suggest` are implemented. `assessment_api.md` is the implemented contract and wins where the two differ; the live schema is `/openapi.json` in local runs.
 
 ## Ownership
 
