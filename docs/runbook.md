@@ -77,17 +77,37 @@ for app in backend web ai; do
 done
 ```
 
+## Demo day checklist
+
+Before:
+
+- Scale web, backend, and ai to `min-replicas 1`.
+- Run `./scripts/smoke.sh`.
+- Open every page you plan to show once, so nothing is cold.
+- Confirm the deployed SHA equals `main`.
+- Keep the Azure revisions page and Log Analytics open in separate tabs.
+
+During:
+
+- If a request fails, retry once, then check the revision list and the logs.
+- Do not deploy anything during the demo.
+
+After:
+
+- Scale all three apps back to 0.
+- Note anything that failed while it is fresh.
+
 ## Cold start
 
-Measured 4 Nov 2026 from a scaled-to-zero state:
+Measured 9 Nov 2026 from a scaled-to-zero state, with the web app on Next.js 16:
 
 | Service | Cold | Warm |
 |---|---|---|
 | Backend | 1.8 s | 0.8 s |
-| Web | 2.9 s | 1.4 s |
+| Web | 5.4 s | 0.4 s |
 | AI | 6.3 s | 0.8 s |
 
-The AI service is the slowest because it loads the rubric and scenario content at startup. Keep replicas warm for demos with the commands above.
+The AI service is the slowest because it loads the rubric and scenario content at startup. The web app got slower on cold start after the Next.js 16 upgrade. Keep replicas warm for demos with the commands above.
 
 ## Verify
 
@@ -130,9 +150,36 @@ The assessor keys live in Azure Key Vault in `praxis-rg`, read by `praxis-ai` th
 az keyvault list -g praxis-rg -o table
 ```
 
-Do not commit key material to the repo.
-
 Production reads two secrets from Key Vault: `assessor-keys` and `capstone-held-out`. Both are JSON objects keyed by version. Local dev reads the copies under `AI_Assessment/tests/fixtures` through `PRAXIS_PROTECTED_CONTENT_DIR`, mounted read-only by `docker-compose.yml`.
+
+### Rotating keys
+
+Add a new version next to the existing ones. Never replace or remove a version that past attempts reference.
+
+```bash
+VAULT=praxis-kv-26c0
+SECRET=assessor-keys
+
+az keyvault secret show --vault-name "$VAULT" --name "$SECRET" --query value -o tsv > current.json
+
+python3 - <<'PY'
+import json
+current = json.load(open("current.json"))
+new = json.load(open("assessor-keys-1.3.0.json"))
+current[new["version"]] = new
+json.dump(current, open("merged.json", "w"), separators=(",", ":"))
+PY
+
+az keyvault secret set --vault-name "$VAULT" --name "$SECRET" --file merged.json --output none
+```
+
+Then deploy the matching content version, and check the AI startup log shows all versions:
+
+```
+"protected_content_loaded" ... "assessor_keys": ["1.0.0", "1.1.0", "1.2.0", "1.3.0"]
+```
+
+After the new version is live, delete the old image versions so the old keys are not baked into any public image. Keep the current SHA and `latest`. Do not commit key material to the repo.
 
 ## Known constraints
 
