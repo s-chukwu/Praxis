@@ -47,6 +47,7 @@ type Client struct {
 	baseURL string
 	secret  string
 	http    *http.Client
+	slow    *http.Client
 	now     func() time.Time
 }
 
@@ -58,6 +59,7 @@ func New(baseURL, secret string) (*Client, error) {
 		baseURL: strings.TrimRight(baseURL, "/"),
 		secret:  secret,
 		http:    &http.Client{Timeout: requestTimeout},
+		slow:    &http.Client{Timeout: skillsTimeout},
 		now:     time.Now,
 	}, nil
 }
@@ -105,7 +107,7 @@ func (c *Client) do(ctx context.Context, method, path string, actor Actor, reque
 			}
 		}
 
-		data, retry, err := c.once(ctx, method, path, actor, requestID, body)
+		data, retry, err := c.once(ctx, c.http, method, path, actor, requestID, body)
 		if err == nil {
 			return data, nil
 		}
@@ -117,7 +119,7 @@ func (c *Client) do(ctx context.Context, method, path string, actor Actor, reque
 	return nil, lastErr
 }
 
-func (c *Client) once(ctx context.Context, method, path string, actor Actor, requestID string, body []byte) (json.RawMessage, bool, error) {
+func (c *Client) once(ctx context.Context, hc *http.Client, method, path string, actor Actor, requestID string, body []byte) (json.RawMessage, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return nil, false, err
@@ -134,7 +136,7 @@ func (c *Client) once(ctx context.Context, method, path string, actor Actor, req
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, ctx.Err() == nil, err
 	}
