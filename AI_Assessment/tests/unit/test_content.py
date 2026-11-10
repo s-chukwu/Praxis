@@ -44,7 +44,7 @@ def _drop_parallel_twin(data: dict) -> None:
     data["scenarios"] = [s for s in data["scenarios"] if s["id"] != "CS-01-B"]
 
 
-def _near_copy_twin(data: dict) -> None:
+def _near_copy_twin(data: dict) -> None:  # A19, at the form level
     baseline = next(s for s in data["scenarios"] if s["id"] == "CS-01-A")
     final = next(s for s in data["scenarios"] if s["id"] == "CS-01-B")
     final["candidate_brief"] = baseline["candidate_brief"].replace("KivuCart", "DeskFlow")
