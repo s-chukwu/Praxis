@@ -7,6 +7,7 @@ type Config struct {
 	CORSAllowedOrigin      string
 	AIServiceURL           string
 	AIServiceSharedSecret  string
+	DatabaseURL            string
 	SupabaseURL            string
 	SupabaseAnonKey        string
 	SupabaseServiceRoleKey string
@@ -18,6 +19,7 @@ func Load() Config {
 		CORSAllowedOrigin:      getEnv("CORS_ALLOWED_ORIGIN", "http://localhost:3000"),
 		AIServiceURL:           getEnv("AI_SERVICE_URL", "http://ai:8000"),
 		AIServiceSharedSecret:  os.Getenv("AI_SERVICE_SHARED_SECRET"),
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
 		SupabaseURL:            os.Getenv("SUPABASE_URL"),
 		SupabaseAnonKey:        os.Getenv("SUPABASE_ANON_KEY"),
 		SupabaseServiceRoleKey: os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
