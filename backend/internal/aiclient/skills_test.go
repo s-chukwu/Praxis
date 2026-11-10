@@ -1,11 +1,16 @@
 package aiclient
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -155,5 +160,139 @@ func TestOtherFailuresAreNotManualReview(t *testing.T) {
 	forbidden := &APIError{Status: http.StatusForbidden, Code: "forbidden"}
 	if NeedsManualReview(forbidden) {
 		t.Fatal("a 403 is not a model outage")
+	}
+}
+
+const cvMarker = "Quokka Ledger zanzibar.q@example.org hunter2"
+
+func TestSkillsSuggestReturnsTheServiceAnswerUntouched(t *testing.T) { // success
+	const answer = `{"request_id":"r1","result":{"suggestions":[{"competency":"C4","evidence_quote":"Escalated suspected account takeovers","confidence":"high","status":"suggested"}],"dropped":0,"model":"gemini/test","requires_candidate_confirmation":true}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(answer))
+	}))
+	defer srv.Close()
+
+	client, err := New(srv.URL, testSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := client.SkillsSuggest(context.Background(), "", validSkillsRequest())
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !json.Valid(data) {
+		t.Fatalf("the answer must be valid JSON, got %s", data)
+	}
+	for _, want := range []string{`"evidence_quote":"Escalated suspected account takeovers"`, `"status":"suggested"`, `"requires_candidate_confirmation":true`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("answer lost %s: %s", want, data)
+		}
+	}
+}
+
+func TestSkillsSuggestRefusesEveryBlankConsentBeforeAnythingElse(t *testing.T) { // consent required
+	var calls int32
+	srv := newSigningServer(t, &calls, "/internal/v1/skills/suggest")
+	client, err := New(srv.URL, testSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, blank := range []string{"", " ", "\t\n"} {
+		req := validSkillsRequest()
+		req.ConsentRef = blank
+		req.CandidateID = "" // also invalid: consent must be the error reported
+		req.Text = ""
+		if _, err := client.SkillsSuggest(context.Background(), "", req); !errors.Is(err, ErrNoConsent) {
+			t.Errorf("consent_ref %q must be refused with ErrNoConsent, got %v", blank, err)
+		}
+	}
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Fatalf("a call without consent must never reach the service, got %d calls", got)
+	}
+}
+
+func TestSkillsSuggestDeadlineIsManualReview(t *testing.T) { // 503 / timeout fallback
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	client, err := New(srv.URL, testSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err = client.SkillsSuggest(ctx, "", validSkillsRequest())
+	if !NeedsManualReview(err) {
+		t.Fatalf("a context deadline must mean manual review, got %v", err)
+	}
+}
+
+func TestNeedsManualReviewSeesThroughWrapping(t *testing.T) { // 503 fallback
+	down := &APIError{Status: http.StatusServiceUnavailable, Code: "model_unavailable"}
+	if !NeedsManualReview(fmt.Errorf("suggest skills for candidate: %w", down)) {
+		t.Fatal("a wrapped 503 model_unavailable must still mean manual review")
+	}
+	if NeedsManualReview(&APIError{Status: http.StatusInternalServerError, Code: "internal_error"}) {
+		t.Fatal("a 500 is a bug, not a model outage")
+	}
+}
+
+func TestSkillsSuggestNeverLogsOrReturnsCVText(t *testing.T) { // no CV text in logs
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":{"code":"model_unavailable","message":"model down","details":{"reason":"timeout"}}}`))
+	}))
+	defer down.Close()
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	defer slow.Close()
+
+	withCV := func() SkillsRequest {
+		req := validSkillsRequest()
+		req.Text = cvMarker
+		return req
+	}
+	var errs []error
+
+	c503, _ := New(down.URL, testSecret)
+	_, err := c503.SkillsSuggest(context.Background(), "", withCV())
+	errs = append(errs, err)
+
+	cSlow, _ := New(slow.URL, testSecret)
+	cSlow.slow = &http.Client{Timeout: 50 * time.Millisecond}
+	_, err = cSlow.SkillsSuggest(context.Background(), "", withCV())
+	errs = append(errs, err)
+
+	noConsent := withCV()
+	noConsent.ConsentRef = ""
+	_, err = c503.SkillsSuggest(context.Background(), "", noConsent)
+	errs = append(errs, err)
+
+	tooLong := withCV()
+	tooLong.Text += strings.Repeat("a", maxCVTextRunes)
+	_, err = c503.SkillsSuggest(context.Background(), "", tooLong)
+	errs = append(errs, err)
+
+	for i, err := range errs {
+		if err == nil {
+			t.Fatalf("case %d: expected an error", i)
+		}
+		for _, part := range strings.Fields(cvMarker) {
+			if strings.Contains(err.Error(), part) {
+				t.Errorf("case %d: error text leaks CV content %q: %v", i, part, err)
+			}
+			if strings.Contains(logs.String(), part) {
+				t.Errorf("case %d: log output leaks CV content %q", i, part)
+			}
+		}
 	}
 }

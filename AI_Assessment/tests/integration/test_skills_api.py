@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from praxis_assessment.api.examples import SKILLS_EXAMPLES
 from praxis_assessment.errors import ModelUnavailable
+from praxis_assessment.llm.gemini import GeminiSkillModel
 
 SKILLS = "/internal/v1/skills/suggest"
 PAYLOAD = SKILLS_EXAMPLES["call_centre_cv"]["value"]
@@ -69,3 +72,105 @@ def test_no_model_answer_means_manual_review(client: TestClient, call, model: Fa
 def test_only_our_go_backend_may_send_cv_text(client: TestClient, call, actor: str) -> None:
     with_model(client, FakeModel([]))
     assert call("POST", SKILLS, PAYLOAD, actor=actor).status_code == 403
+
+
+CV_WITH_CONTACTS = (
+    "Amari K. - amari.k@example.com - +250 788 000 111 - National ID 1199880012345678\n"
+    "Call centre agent, Kigali. Handled 60 billing tickets a day.\n"
+    "Escalated suspected account takeovers to the security team."
+)
+LOGGED_CV = (
+    "Quokka Ledger Co. - zanzibar.q@example.org - +250 788 555 019\n"
+    "Handled 60 billing tickets a day. My password is hunter2."
+)
+CV_FRAGMENTS = ("Quokka Ledger", "zanzibar.q", "788 555 019", "788555019", "billing tickets", "hunter2")
+
+
+def without(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    return {k: v for k, v in payload.items() if k != key}
+
+
+def test_a_cv_with_no_evidence_is_an_empty_answer_not_a_failure(client: TestClient, call) -> None:  # success
+    with_model(client, FakeModel([]))
+    response = call("POST", SKILLS, PAYLOAD, actor="system")
+    assert response.status_code == 200, response.text
+    result = response.json()["result"]
+    assert (result["suggestions"], result["dropped"], result["requires_candidate_confirmation"]) == ([], 0, True)
+
+
+def test_the_answer_names_the_consent_and_standard_it_was_made_under(client: TestClient, call) -> None:  # success
+    with_model(client, FakeModel([]))
+    response = call("POST", SKILLS, PAYLOAD, actor="system")
+    body = response.json()
+    assert [body[k] for k in ("request_id", "candidate_id", "consent_ref")] == [
+        PAYLOAD[k] for k in ("request_id", "candidate_id", "consent_ref")
+    ]
+    assert body["role_standard"]["version"] == PAYLOAD["role_standard_version"]
+    assert response.headers["Cache-Control"] == "no-store"  # CV evidence must not be cached
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        without(PAYLOAD, "consent_ref"),
+        PAYLOAD | {"consent_ref": ""},
+        PAYLOAD | {"consent_ref": None},
+        PAYLOAD | {"consent_ref": "not-a-uuid"},
+    ],
+    ids=["missing", "empty", "null", "not_a_uuid"],
+)
+def test_no_valid_consent_reference_means_the_model_is_never_called(client: TestClient, call, body) -> None:  # consent
+    model = with_model(client, FakeModel([]))
+    response = call("POST", SKILLS, body, actor="system")
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "invalid_request"
+    assert [e["loc"] for e in error["details"]["errors"]] == [["body", "consent_ref"]]
+    assert model.sent == []
+    assert "amari.k@example.com" not in response.text and "billing tickets" not in response.text
+
+
+def test_no_contact_detail_reaches_the_model_or_comes_back(client: TestClient, call) -> None:  # contact masking
+    quote = "Handled 60 billing tickets a day"
+    model = with_model(client, FakeModel([{"competency": "C3", "quote": quote, "confidence": "high"}]))
+    response = call("POST", SKILLS, PAYLOAD | {"text": CV_WITH_CONTACTS}, actor="system")
+    assert response.status_code == 200, response.text
+    _, sent = model.sent[0]
+    for private in ("amari.k@example.com", "+250 788 000 111", "788 000 111", "1199880012345678"):
+        assert private not in sent and private not in response.text
+    assert "[email]" in sent and sent.count("[number]") == 2
+    assert quote in sent  # masking removes contacts, not evidence
+    assert [s["evidence_quote"] for s in response.json()["result"]["suggestions"]] == [quote]
+
+
+def gemini_down() -> GeminiSkillModel:
+    """The real Gemini wrapper, whose upstream answers 500 and quotes the CV back in its error."""
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"error": {"message": f"upstream said {LOGGED_CV}"}})
+
+    return GeminiSkillModel("test-key", "gemini-test", transport=httpx.MockTransport(upstream), sleep=lambda _: None)
+
+
+@pytest.mark.parametrize(
+    ("make_model", "actor", "body", "status"),
+    [
+        (lambda: FakeModel([{"competency": "C3", "quote": "Handled 60 billing tickets a day", "confidence": "high"}]),
+         "system", PAYLOAD | {"text": LOGGED_CV}, 200),
+        (lambda: FakeModel(ModelUnavailable("down", details={"reason": "timeout"})),
+         "system", PAYLOAD | {"text": LOGGED_CV}, 503),
+        (lambda: None, "system", PAYLOAD | {"text": LOGGED_CV}, 503),
+        (gemini_down, "system", PAYLOAD | {"text": LOGGED_CV}, 503),
+        (lambda: FakeModel([]), "system", without(PAYLOAD, "consent_ref") | {"text": LOGGED_CV}, 422),
+        (lambda: FakeModel([]), f"candidate:{uuid.uuid4()}", PAYLOAD | {"text": LOGGED_CV}, 403),
+    ],
+    ids=["success", "model_unavailable", "not_configured", "provider_500_echoes_cv", "invalid_request", "forbidden"],
+)  # fmt: skip
+def test_cv_text_never_reaches_the_logs(client: TestClient, call, caplog, make_model, actor, body, status) -> None:
+    caplog.set_level(logging.DEBUG)
+    with_model(client, make_model())
+    assert call("POST", SKILLS, body, actor=actor).status_code == status
+    assert any(r.name == "praxis_assessment.access" for r in caplog.records)
+    everything = caplog.text + "\n".join(repr(vars(r)) for r in caplog.records)
+    for fragment in CV_FRAGMENTS:
+        assert fragment not in everything, f"CV text {fragment!r} was logged"
