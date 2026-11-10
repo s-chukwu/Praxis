@@ -34,7 +34,7 @@ class GeminiSkillModel:
         api_key: str,
         model: str,
         *,
-        timeout_s: float = 8.0,
+        timeout_s: float = 12.0,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -53,8 +53,8 @@ class GeminiSkillModel:
             "contents": [{"role": "user", "parts": [{"text": cv_text}]}],
             "generationConfig": {"responseMimeType": "application/json", "responseSchema": _SCHEMA, "temperature": 0},
         }
-        # One retry, only for failures that a second try can fix. Two attempts at 8 s stay inside the
-        # time our Go backend should allow; anything slower goes to a person instead.
+        # One retry, only for failures that a second try can fix. Two attempts at 12 s stay inside the
+        # 30 s our Go backend allows; anything slower goes to a person instead.
         reason = "unknown"
         for attempt in range(2):
             try:

@@ -56,7 +56,7 @@ def test_same_question_gets_the_same_answer() -> None:
 
 
 def test_config_for_another_capstone_or_unknown_source_is_rejected() -> None:
-    with pytest.raises(InvalidInput, match="targets capstone 2.0.0"):
+    with pytest.raises(InvalidInput, match=r"targets capstone 2\.0\.0"):
         require_compatible(CAPSTONE, BotConfig.model_validate(bot_config(capstone_version="2.0.0")))
     bad = bot_config(intents=[{"id": "x", "phrases": ["hi"], "source_id": "FAQ-REFUNDS"}])
     with pytest.raises(InvalidInput, match="outside the knowledge base"):

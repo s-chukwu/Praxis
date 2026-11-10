@@ -89,7 +89,7 @@ def test_auth_runs_before_schema_validation(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize("actor", [f"candidate:{uuid.uuid4()}", f"admin:{uuid.uuid4()}", "system"])
-def test_only_reviewers_may_score(call, actor: str) -> None:
+def test_only_reviewers_may_score(call, actor: str) -> None:  # A11
     response = call("POST", SCORE, score_payload(), actor=actor)
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "forbidden"
