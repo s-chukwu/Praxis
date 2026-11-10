@@ -71,7 +71,7 @@ def test_result_does_not_depend_on_dimension_order() -> None:
     assert run(payload) == run(reordered)
 
 
-def test_same_input_gives_byte_identical_output() -> None:
+def test_same_input_gives_byte_identical_output() -> None:  # A08: a retry gets the same answer
     payload = score_payload(critical_findings=[finding("dismissed")])
     assert run(payload).model_dump_json() == run(payload).model_dump_json()
 
