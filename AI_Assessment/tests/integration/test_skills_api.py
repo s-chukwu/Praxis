@@ -170,7 +170,7 @@ def test_cv_text_never_reaches_the_logs(client: TestClient, call, caplog, make_m
     caplog.set_level(logging.DEBUG)
     with_model(client, make_model())
     assert call("POST", SKILLS, body, actor=actor).status_code == status
-    assert any(r.name == "praxis_assessment.access" for r in caplog.records)  # logging ran, so the check means something
+    assert any(r.name == "praxis_assessment.access" for r in caplog.records)
     everything = caplog.text + "\n".join(repr(vars(r)) for r in caplog.records)
     for fragment in CV_FRAGMENTS:
         assert fragment not in everything, f"CV text {fragment!r} was logged"
