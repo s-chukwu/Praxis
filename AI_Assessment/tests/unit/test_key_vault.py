@@ -77,7 +77,7 @@ def test_versions_stored_as_file_text_load_too() -> None:
 
 def test_a_bank_version_missing_from_the_secret_refuses_to_start() -> None:
     source = parse_key_map("assessor-keys", json.dumps({"1.0.0": SHIPPED["1.0.0"]}))
-    with pytest.raises(ContentError, match="no assessor keys for scenario bank 1.1.0"):
+    with pytest.raises(ContentError, match=r"no assessor keys for scenario bank 1\.1\.0"):
         load_registry(DEFAULT_CONTENT_DIR, source, HELD_OUT_FIXTURES)
 
 

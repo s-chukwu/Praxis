@@ -132,13 +132,13 @@ def test_broken_content_refuses_to_load(content_dir: Path, relative: str, mutate
 def test_file_name_must_match_declared_version(content_dir: Path) -> None:
     (content_dir / "rubric" / "0.1.0.json").rename(content_dir / "rubric" / "0.1.1.json")
     edit_json(content_dir / "current.json", lambda d: d.update(rubric="0.1.1"))
-    with pytest.raises(ContentError, match="declares version 0.1.0"):
+    with pytest.raises(ContentError, match=r"declares version 0\.1\.0"):
         load_registry(content_dir)
 
 
 def test_scenario_bank_without_assessor_keys_refuses_to_load(content_dir: Path) -> None:
     (content_dir / "assessor_keys" / "1.0.0.json").unlink()
-    with pytest.raises(ContentError, match="no assessor keys for scenario bank 1.0.0"):
+    with pytest.raises(ContentError, match=r"no assessor keys for scenario bank 1\.0\.0"):
         load_registry(content_dir)
 
 
@@ -176,7 +176,7 @@ def test_keys_come_from_the_given_source_not_the_local_files(content_dir: Path) 
 def test_key_set_declaring_another_version_is_rejected() -> None:
     documents = _shipped_keys()
     documents["1.1.0"] = documents["1.0.0"]
-    with pytest.raises(ContentError, match="scenario bank 1.1.0 declare version 1.0.0"):
+    with pytest.raises(ContentError, match=r"scenario bank 1\.1\.0 declare version 1\.0\.0"):
         load_registry(DEFAULT_CONTENT_DIR, FakeKeySource(documents), HELD_OUT_FIXTURES)
 
 
