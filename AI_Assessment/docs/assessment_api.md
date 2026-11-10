@@ -4,7 +4,7 @@
 `Go gateway -> internal Python service -> Go-owned persistence/Supabase`. Go authenticates users and checks permissions; Python verifies that every internal call was signed by Go and checks the actor role again as defense in depth. Python stores nothing. Only `skills/suggest` calls an LLM (Gemini); everything else is deterministic. DO NOT expose port 8000 publicly or use live applicant data.
 
 ## Implemented endpoints (milestones 1–5)
-The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_ENV=local`; it is disabled in production.
+The live OpenAPI schema is at `http://localhost:8000/openapi.json` when `PRAXIS_ENV=local`; it is disabled in production. Generate Go types from it. A contract test (`tests/quality/test_contract.py`) fails on any change to paths, fields, types or status codes, so a breaking change always comes with a heads-up to the Go team.
 
 | Method + path | Allowed actor | Purpose |
 |---|---|---|
