@@ -1,12 +1,15 @@
 'use client';
 import { usePathname } from 'next/navigation';
 
-const titles: Record<string, string> = {
-  '/': 'Overview',
-  '/skill-catalog': 'Skill Catalog',
-  '/assessments': 'Assessments',
-  '/candidate-review': 'Candidate Review',
-};
+   const titles: Record<string, string> = {
+     '/': 'Overview',
+     '/path': 'My path',
+     '/path/cv': 'CV and consent',
+     '/path/baseline': 'Baseline task',
+     '/path/plan': 'Learning plan',
+     '/skill-catalog': 'Skill Catalog',
+     '/candidate-review': 'Candidate Review',
+   };
 
 export default function Topbar({ onMenu }: { onMenu: () => void }) {
   const path = usePathname();

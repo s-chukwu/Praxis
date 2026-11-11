@@ -7,8 +7,8 @@ const items = [
   { label: 'Overview', href: '/', icon: 'M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10' },
   { label: 'Skill Catalog', href: '/skill-catalog', icon: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z' },
   {
-    label: 'Assessments',
-    href: '/assessments',
+    label: 'My path',
+    href: '/path',
     icon: 'M9 4h6v3H9z M7 5H6a1 1 0 00-1 1v14a1 1 0 001 1h12a1 1 0 001-1V6a1 1 0 00-1-1h-1 M9 12h6 M9 16h6',
   },
   { label: 'Candidate Review', href: '/candidate-review', icon: 'M12 12a4 4 0 100-8 4 4 0 000 8z M4 21a8 8 0 0116 0' },
