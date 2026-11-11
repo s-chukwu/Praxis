@@ -23,8 +23,10 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	}
 
 	var attempts AttemptStore
+	var reviews ReviewStore
 	if db != nil {
 		attempts = db
+		reviews = db
 	}
 
 	mux := http.NewServeMux()
@@ -32,6 +34,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	mux.HandleFunc("GET /health", health)
 	mux.Handle("GET /v1/me", requireRole(authn)(http.HandlerFunc(me)))
 	registerAttemptRoutes(mux, authn, attempts)
+	registerReviewRoutes(mux, authn, reviews)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }

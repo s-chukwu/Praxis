@@ -164,6 +164,18 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "illegal_transition", "the attempt cannot move to that state")
 	case errors.Is(err, workflow.ErrRoleNotAllowed):
 		writeError(w, http.StatusForbidden, "forbidden", "your role is not allowed to do this")
+	case errors.Is(err, workflow.ErrSelfReview):
+		writeError(w, http.StatusForbidden, "forbidden", "a reviewer cannot review their own attempt")
+	case errors.Is(err, store.ErrReviewNotYours):
+		writeError(w, http.StatusNotFound, "not_found", "review not found")
+	case errors.Is(err, store.ErrReviewFinalized):
+		writeError(w, http.StatusConflict, "review_finalized", "the review is already finalized")
+	case errors.Is(err, store.ErrPendingFindings):
+		writeError(w, http.StatusConflict, "pending_findings", "every critical finding must be confirmed or dismissed first")
+	case errors.Is(err, store.ErrNoScores):
+		writeError(w, http.StatusConflict, "no_scores", "a review needs at least one dimension score")
+	case errors.Is(err, store.ErrInvalidInput):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", err.Error())
 	default:
 		log.Printf("attempt route failed: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "something went wrong")
