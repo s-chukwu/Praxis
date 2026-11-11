@@ -37,6 +37,16 @@ for app in ai backend web; do
 done
 ```
 
+## Troubleshooting deploys
+
+If `az containerapp update` fails with `ContainerAppOperationInProgress`, another update is still provisioning. Do not delete the app.
+
+- Check the app: `az containerapp show -g praxis-rg -n praxis-ai --query properties.provisioningState -o tsv`
+- Wait 10 to 15 minutes for the active operation to finish.
+- Re-run the failed Release job from GitHub Actions. If it still fails, retry the manual update for `praxis-ai` first, then `praxis-backend` and `praxis-web`.
+
+The app can stay healthy on its old revision during this, so run `./scripts/smoke.sh` before and after.
+
 ## Rollback
 
 Every merge produces a SHA-tagged image, so rollback is deploying the previous tag.
@@ -142,6 +152,22 @@ az containerapp secret list -g praxis-rg -n praxis-backend
 
 Rotating `AI_SERVICE_SHARED_SECRET` requires setting the same value on both apps, then restarting revisions.
 
+### Gemini key
+
+`praxis-ai` reads `GEMINI_API_KEY` from the Container Apps secret `gemini-api-key`. Without it, `POST /internal/v1/skills/suggest` returns 503 `model_unavailable` with reason `not_configured`; the service still starts and every other route works.
+
+Set or rotate it without echoing the key:
+
+```bash
+read -rs GEMINI_KEY && printf '%s' "$GEMINI_KEY" > ~/.azure/gemini.key && chmod 600 ~/.azure/gemini.key && unset GEMINI_KEY
+
+az containerapp secret set -g praxis-rg -n praxis-ai --secrets gemini-api-key="$(cat ~/.azure/gemini.key)"
+az containerapp update -g praxis-rg -n praxis-ai --set-env-vars GEMINI_API_KEY=secretref:gemini-api-key
+rm ~/.azure/gemini.key
+```
+
+Restrict the key to the Generative Language API in the Google Cloud console. `GEMINI_MODEL` is plain env. The code default is `gemini-2.5-flash`, but 2.5 is closed to new keys, so pin `gemini-3.5-flash`.
+
 ## Assessor keys
 
 The assessor keys live in Azure Key Vault in `praxis-rg`, read by `praxis-ai` through the `praxis-ai-identity` managed identity. To find the vault:
@@ -190,6 +216,7 @@ Names only. Values are set in Azure, or in `.env` for local runs.
 | Backend | `SUPABASE_URL` | plain env |
 | Backend | `SUPABASE_ANON_KEY` | plain env |
 | Backend | `SUPABASE_SERVICE_ROLE_KEY` | Container Apps secret `supabase-service-role-key` |
+| Backend | `DATABASE_URL` | Container Apps secret `database-url` |
 | Backend | `AI_SERVICE_URL` | plain env |
 | Backend | `AI_SERVICE_SHARED_SECRET` | Container Apps secret `ai-shared-secret` |
 | Backend | `CORS_ALLOWED_ORIGIN` | plain env |
@@ -199,6 +226,8 @@ Names only. Values are set in Azure, or in `.env` for local runs.
 | AI | `ASSESSOR_KEYS_SECRET_NAME` | `assessor-keys` |
 | AI | `CAPSTONE_HELD_OUT_SECRET_NAME` | `capstone-held-out` |
 | AI | `AZURE_CLIENT_ID` | managed identity client id |
+| AI | `GEMINI_API_KEY` | Container Apps secret `gemini-api-key` |
+| AI | `GEMINI_MODEL` | plain env; pin `gemini-3.5-flash` |
 | Web | `API_INTERNAL_URL` | plain env |
 | Web | `NEXT_PUBLIC_API_URL` | plain env |
 
