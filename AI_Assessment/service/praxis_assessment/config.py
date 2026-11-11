@@ -8,7 +8,8 @@ from typing import Literal
 
 DEFAULT_CONTENT_DIR = Path(__file__).parent / "content" / "data"
 MIN_SECRET_BYTES = 32
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+# Checked against a new key on 2026-11-09: the 2.5 models are closed to new users, 3.5 answers in 5-8 s.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 KEY_VAULT_ENV = ("AZURE_KEY_VAULT_URL", "AZURE_CLIENT_ID", "ASSESSOR_KEYS_SECRET_NAME", "CAPSTONE_HELD_OUT_SECRET_NAME")
 
 

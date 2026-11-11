@@ -12,6 +12,11 @@ import (
 
 type ctxKey struct{}
 
+// Authenticator is satisfied by *auth.Authenticator. Tests use a fake one.
+type Authenticator interface {
+	Authenticate(r *http.Request) (auth.Identity, error)
+}
+
 func identityFrom(ctx context.Context) (auth.Identity, bool) {
 	id, ok := ctx.Value(ctxKey{}).(auth.Identity)
 	return id, ok
@@ -32,7 +37,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 // requireRole checks the login token, looks up the user's role in the database
 // and, when roles are listed, only lets those roles through.
-func requireRole(authn *auth.Authenticator, allowed ...string) func(http.Handler) http.Handler {
+func requireRole(authn Authenticator, allowed ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if authn == nil {

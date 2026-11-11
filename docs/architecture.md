@@ -2,12 +2,12 @@
 
 ```mermaid
 flowchart LR
-  user[Browser] --> web["Web<br/>Next.js 14<br/>public"]
+  user[Browser] --> web["Web<br/>Next.js 16<br/>public"]
   web -->|"server-side fetch"| backend["Backend API<br/>Go<br/>public"]
   backend -->|"HMAC signed"| ai["AI service<br/>FastAPI<br/>internal ingress"]
   backend --> db[("Supabase<br/>Postgres + Auth")]
   ai --> kv[("Azure Key Vault<br/>assessor keys")]
-  ai --> llm["Gemini primary<br/>DeepSeek fallback"]
+  ai --> llm["Gemini<br/>skills/suggest only"]
 ```
 
 ## Deploy flow
@@ -27,11 +27,11 @@ flowchart LR
 
 | Component | Runtime | Exposure | Notes |
 |---|---|---|---|
-| Web | Next.js 14, Node 20 | Public | Renders backend health server-side |
+| Web | Next.js 16, Node 20 | Public | Renders backend health server-side |
 | Backend | Go 1.23 | Public | Signs every AI call with HMAC |
 | AI | FastAPI, Python 3.12 | Internal ingress | Rejects unsigned `/internal` calls with 401 |
 | Database | Supabase | Private | Go owns reads and writes |
-| Secrets | Azure Key Vault | Private | Read by `praxis-ai` managed identity |
+| Secrets | Key Vault and Container Apps | Encrypted at rest | Assessor keys in Key Vault; Gemini and database secrets in Container Apps |
 
 ## Constraints
 
