@@ -3,7 +3,7 @@ import EmptyState from '@/components/ui/EmptyState';
 
 type Health = { status: string; service: string; version: string };
 
-// Teammate's backend health check - kept as is
+
 async function getBackendHealth(): Promise<Health | null> {
   const base = process.env.API_INTERNAL_URL ?? 'http://localhost:8080';
   try {
@@ -20,7 +20,7 @@ export default async function Home() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader title="Overview" description="Your assessments and progress." />
-      {/* TODO(Chidi): show real results here once the assessments API exists */}
+      
       <EmptyState
         title="No assessments yet"
         description="Start your first one."
