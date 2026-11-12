@@ -1,11 +1,12 @@
-export default function Logo() {
+export default function Logo({ className = '' }: { className?: string }) {
   return (
-    <div className="flex items-center gap-2">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path d="M5 3h8a6 6 0 010 12H9v6H5V3z" fill="#fff" />
-        <path d="M9 7l5 2.5L9 12V7z" fill="#0A0D12" />
+    <span className={`inline-flex items-center gap-2 text-ink ${className}`}>
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="7" className="fill-brand" />
+        <path d="M9 20V7.5h5.25a4 4 0 010 8H9" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M13 11.5l1.6 1.6 3-3.2" fill="none" stroke="#FBF1DF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span className="text-[17px] font-semibold tracking-tight text-white">praxis</span>
-    </div>
+      <span className="text-[19px] font-bold tracking-tight">praxis</span>
+    </span>
   );
 }

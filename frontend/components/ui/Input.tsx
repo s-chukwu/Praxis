@@ -1,20 +1,27 @@
 import type { InputHTMLAttributes } from 'react';
+import { fieldControl, fieldError, fieldHint, fieldLabel } from './field';
 
-export default function Input({
-  label,
-  id,
-  ...props
-}: InputHTMLAttributes<HTMLInputElement> & { label: string; id: string }) {
+type Props = InputHTMLAttributes<HTMLInputElement> & { label: string; id: string; hint?: string; error?: string };
+
+export default function Input({ label, id, hint, error, ...props }: Props) {
+  const note = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
   return (
     <div>
-      <label htmlFor={id} className="block text-sm text-gray-300">
+      <label htmlFor={id} className={fieldLabel}>
         {label}
       </label>
-      <input
-        id={id}
-        {...props}
-        className="mt-1 w-full rounded-md border border-[#1C222B] bg-[#080B0F] px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-      />
+      <input id={id} aria-invalid={Boolean(error)} aria-describedby={note} {...props} className={fieldControl(Boolean(error))} />
+      {error ? (
+        <p id={note} className={fieldError}>
+          {error}
+        </p>
+      ) : (
+        hint && (
+          <p id={note} className={fieldHint}>
+            {hint}
+          </p>
+        )
+      )}
     </div>
   );
 }

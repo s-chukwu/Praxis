@@ -1,20 +1,25 @@
 import type { TextareaHTMLAttributes } from 'react';
+import { fieldControl, fieldHint, fieldLabel } from './field';
 
-export default function Textarea({
-  label,
-  id,
-  ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; id: string }) {
+type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; id: string; hint?: string };
+
+export default function Textarea({ label, id, hint, ...props }: Props) {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-white">
+      <label htmlFor={id} className={fieldLabel}>
         {label}
       </label>
       <textarea
         id={id}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         {...props}
-        className="mt-2 w-full rounded-md border border-[#1C222B] bg-[#080B0F] px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+        className={`${fieldControl()} resize-y leading-relaxed`}
       />
+      {hint && (
+        <p id={`${id}-hint`} className={fieldHint}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
