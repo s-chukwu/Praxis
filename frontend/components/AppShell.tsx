@@ -1,27 +1,55 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { LearnerProvider, useLearner } from './LearnerProvider';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import ErrorScreen from './ErrorScreen';
+import { PREVIEW } from '@/lib/learner';
 
-const NO_SHELL = ['/login', '/signup'];
+// The landing page belongs to another team; these routes render without the learner shell.
+const PUBLIC = ['/', '/login', '/signup'];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <LearnerProvider>
+      <Frame>{children}</Frame>
+    </LearnerProvider>
+  );
+}
+
+function Frame({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const { learner, ready, loadError, refresh } = useLearner();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isPublic = PUBLIC.includes(path);
+  const isOnboarding = path.startsWith('/onboarding');
+
+  useEffect(() => setMenuOpen(false), [path]);
 
   useEffect(() => {
-    setOpen(false);
-  }, [path]);
+    if (!ready || isPublic || loadError) return;
+    if (!learner) router.replace(`/login?next=${encodeURIComponent(path)}`);
+    else if (!learner.onboarded && !isOnboarding) router.replace('/onboarding');
+  }, [ready, learner, loadError, isPublic, isOnboarding, path, router]);
 
-  if (NO_SHELL.includes(path)) return <>{children}</>;
+  if (isPublic) return <>{children}</>;
+  if (loadError) return <ErrorScreen message={loadError} onRetry={() => void refresh()} />;
+  if (!ready || !learner) return <div className="min-h-screen bg-page" aria-busy="true" />;
+  if (isOnboarding) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar open={open} onClose={() => setOpen(false)} />
+      {PREVIEW && (
+        <p className="fixed bottom-4 right-4 z-40 rounded-full bg-ink px-3.5 py-1.5 text-xs font-semibold text-white shadow-lift">
+          Preview: sample learner, nothing is saved online
+        </p>
+      )}
+      <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onMenu={() => setOpen(true)} />
-        <main className="flex-1 px-4 py-6 md:px-8">{children}</main>
+        <Topbar onMenu={() => setMenuOpen(true)} />
+        <main className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-8 md:px-10 md:py-10">{children}</main>
       </div>
     </div>
   );

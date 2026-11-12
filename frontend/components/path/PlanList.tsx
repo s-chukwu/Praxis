@@ -1,29 +1,29 @@
+import { ListOrdered } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
+import { courseNames } from '@/lib/catalog';
 
-export type PlanItem = { order: number; code: string; title: string; reason?: string };
+export type PlanItem = { order: number; code: string; reason?: string };
 
 export default function PlanList({ items }: { items?: PlanItem[] }) {
   if (!items || items.length === 0) {
     return (
       <EmptyState
-        title="Your learning plan is not ready"
-        description="It will appear here once your baseline has been reviewed."
+        icon={<ListOrdered className="h-5 w-5" aria-hidden />}
+        title="Your plan comes after your baseline review"
+        description="Once a reviewer scores your baseline task, your courses appear here in order, each with the reason it is in your plan."
+        actionHref="/path/baseline"
+        actionLabel="Go to baseline task"
       />
     );
   }
   return (
-    <ol className="divide-y divide-[#161B22] rounded-lg border border-[#161B22] bg-[#0D1117]">
+    <ol className="divide-y divide-line rounded-panel bg-surface shadow-panel">
       {items.map((i) => (
-        <li key={i.code} className="flex items-center gap-4 p-4">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#1C222B] text-xs text-gray-300">
-            {i.order}
-          </span>
+        <li key={i.code} className="flex gap-4 p-5">
+          <span className="text-xl font-bold leading-7 text-brand">{i.order}</span>
           <div>
-            <p className="text-sm font-medium text-white">{i.title}</p>
-            <p className="mt-0.5 text-xs text-gray-400">
-              {i.code}
-              {i.reason ? ` · ${i.reason}` : ''}
-            </p>
+            <p className="font-semibold">{courseNames[i.code] ?? i.code}</p>
+            {i.reason && <p className="mt-0.5 text-sm text-muted">{i.reason}</p>}
           </div>
         </li>
       ))}

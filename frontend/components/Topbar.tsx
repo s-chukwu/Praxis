@@ -1,30 +1,15 @@
 'use client';
-import { usePathname } from 'next/navigation';
+import { Menu } from 'lucide-react';
+import Logo from './Logo';
 
-   const titles: Record<string, string> = {
-     '/': 'Overview',
-     '/path': 'My path',
-     '/path/cv': 'CV and consent',
-     '/path/baseline': 'Baseline task',
-     '/path/plan': 'Learning plan',
-     '/skill-catalog': 'Skill Catalog',
-     '/candidate-review': 'Candidate Review',
-   };
-
+// Desktop pages carry their own headings; the bar only exists to open the menu on small screens.
 export default function Topbar({ onMenu }: { onMenu: () => void }) {
-  const path = usePathname();
   return (
-    <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b border-[#161B22] bg-[#0A0D12]/90 px-4 backdrop-blur md:px-8">
-      <button
-        onClick={onMenu}
-        aria-label="Open menu"
-        className="rounded-md p-1 text-gray-400 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 md:hidden"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <path d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+    <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur md:hidden">
+      <button onClick={onMenu} aria-label="Open menu" className="rounded-control p-2 text-ink hover:bg-page">
+        <Menu className="h-5 w-5" aria-hidden />
       </button>
-      <p className="text-sm text-gray-200">{titles[path] ?? 'Praxis'}</p>
+      <Logo />
     </header>
   );
 }
