@@ -46,6 +46,12 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", health)
+
+	// Temporary route for testing Sentry error reporting.
+	mux.HandleFunc("GET /debug/panic", func(w http.ResponseWriter, r *http.Request) {
+		panic("sentry test")
+	})
+
 	mux.Handle("GET /v1/me", requireRole(authn)(http.HandlerFunc(me)))
 	registerAttemptRoutes(mux, authn, attempts)
 	registerReviewRoutes(mux, authn, reviews)
