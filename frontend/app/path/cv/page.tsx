@@ -1,14 +1,14 @@
+'use client';
+import { useRouter } from 'next/navigation';
 import PageHeader from '@/components/ui/PageHeader';
 import CvConsent from '@/components/path/CvConsent';
 
 export default function CvPage() {
+  const router = useRouter();
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <p className="mb-1 text-xs text-gray-400">Step 1 of 4</p>
-        <PageHeader title="CV and consent" description="Add your CV to get skill suggestions." />
-      </div>
-      <CvConsent />
+    <div className="max-w-3xl space-y-8">
+      <PageHeader title="Your CV" description="Update your CV and confirm the skills it suggests." />
+      <CvConsent onDone={() => router.push('/dashboard')} />
     </div>
   );
 }

@@ -1,15 +1,16 @@
 'use client';
 import { useState } from 'react';
+import { Clock } from 'lucide-react';
 import Textarea from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 
 export type Scenario = { id: string; brief: string; timeboxMinutes: number };
 
 const fields = [
-  { id: 'customer_reply', label: 'Customer reply', rows: 5 },
-  { id: 'internal_note', label: 'Internal note', rows: 3 },
-  { id: 'verification_steps', label: 'Verification steps (3 to 5)', rows: 4 },
-  { id: 'ai_record', label: 'AI interaction record (optional)', rows: 3 },
+  { id: 'customer_reply', label: 'Reply to the customer', rows: 6 },
+  { id: 'internal_note', label: 'Internal note for your team', rows: 3 },
+  { id: 'verification_steps', label: 'Verification steps', hint: 'Three to five steps, one per line.', rows: 4 },
+  { id: 'ai_record', label: 'How you used AI (optional)', hint: 'Paste the AI draft and what you changed.', rows: 3 },
 ];
 
 export default function BaselineForm({ scenario }: { scenario?: Scenario }) {
@@ -18,37 +19,48 @@ export default function BaselineForm({ scenario }: { scenario?: Scenario }) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('Submitting is not connected to the backend yet.');
+    setMessage('Submitting opens once the assessment service is connected. Your answers stay on this page until then.');
   };
 
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <section className="rounded-lg border border-[#161B22] bg-[#0D1117] p-5">
-        <p className="text-xs text-gray-400">
-          Scenario{scenario ? ` · Time guide: ${scenario.timeboxMinutes} minutes` : ''}
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-gray-300">
-          {scenario ? scenario.brief : 'Your scenario will appear here.'}
+    <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-start">
+      <section aria-labelledby="case-title" className="rounded-panel bg-surface p-6 shadow-panel lg:sticky lg:top-8">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="case-title" className="font-bold">
+            The customer case
+          </h2>
+          {scenario && (
+            <span className="flex items-center gap-1.5 text-sm text-muted">
+              <Clock className="h-4 w-4" aria-hidden /> {scenario.timeboxMinutes} minutes
+            </span>
+          )}
+        </div>
+        <p className="mt-3 leading-relaxed text-ink/90">
+          {scenario ? scenario.brief : 'Your case appears here when you start the task. Take your time to read it before you answer.'}
         </p>
       </section>
 
-      {fields.map((f) => (
-        <Textarea
-          key={f.id}
-          id={f.id}
-          label={f.label}
-          rows={f.rows}
-          value={answers[f.id] ?? ''}
-          onChange={(e) => setAnswers((a) => ({ ...a, [f.id]: e.target.value }))}
-        />
-      ))}
-
-      {message && (
-        <div role="status" className="rounded-md border border-[#1C222B] bg-[#080B0F] p-2 text-sm text-gray-300">
-          {message}
-        </div>
-      )}
-      <Button type="submit">Submit answers</Button>
+      <div className="space-y-6">
+        {fields.map((f) => (
+          <Textarea
+            key={f.id}
+            id={f.id}
+            label={f.label}
+            hint={f.hint}
+            rows={f.rows}
+            value={answers[f.id] ?? ''}
+            onChange={(e) => setAnswers((a) => ({ ...a, [f.id]: e.target.value }))}
+          />
+        ))}
+        {message && (
+          <p role="status" className="rounded-control bg-progress-soft px-4 py-3 text-sm text-[#7A4E09]">
+            {message}
+          </p>
+        )}
+        <Button type="submit" size="lg">
+          Submit my answers
+        </Button>
+      </div>
     </form>
   );
 }
