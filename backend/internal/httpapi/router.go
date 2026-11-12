@@ -26,17 +26,21 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	var attempts AttemptStore
 	var reviews ReviewStore
 	var finalizer Finalizer
+	var plans PlanStore
 	if db != nil {
 		attempts = db
 		reviews = db
 		finalizer = db
+		plans = db
 	}
 
 	// Without a valid shared secret the AI client cannot sign calls, so the routes
 	// that need it answer 503 instead of failing at startup.
 	var scorer Scorer
+	var planner Planner
 	if client, err := aiclient.New(cfg.AIServiceURL, cfg.AIServiceSharedSecret); err == nil {
 		scorer = client
+		planner = client
 	}
 
 	mux := http.NewServeMux()
@@ -46,6 +50,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerAttemptRoutes(mux, authn, attempts)
 	registerReviewRoutes(mux, authn, reviews)
 	registerFinalizeRoute(mux, authn, reviews, finalizer, scorer)
+	registerPlanRoutes(mux, authn, reviews, plans, planner)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
