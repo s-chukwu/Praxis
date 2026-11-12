@@ -62,6 +62,7 @@ func (f fakeFinalizer) FinalizeReview(ctx context.Context, reviewID string, revi
 	score := in.WeightedScore
 	outcome := in.ProposedOutcome
 	r.FinalizedAt = &now
+	r.ReviewedCompetencies = in.ReviewedCompetencies
 	r.WeightedScore = &score
 	r.ProposedOutcome = &outcome
 	r.OutcomeReasons = in.OutcomeReasons
