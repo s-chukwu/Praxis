@@ -64,6 +64,16 @@ func (f *fakeReviews) StartReview(ctx context.Context, attemptID string, reviewe
 	return review, nil
 }
 
+func (f *fakeReviews) ListReviewerReviews(ctx context.Context, reviewerID string) ([]store.Review, error) {
+	var out []store.Review
+	for _, r := range f.reviews {
+		if r.ReviewerID == reviewerID {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeReviews) GetReview(ctx context.Context, id string) (store.Review, error) {
 	r, ok := f.reviews[id]
 	if !ok {
@@ -271,4 +281,22 @@ func TestStartingAReviewAgainReturnsTheSameDraft(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "review_taken") {
 		t.Fatalf("expected review_taken, got %s", rec.Body.String())
 	}
+}
+
+func TestReviewersListOnlyTheirOwnReviews(t *testing.T) {
+	h, _ := newReviewTestRouter()
+	reviewID := startedReview(t, h, submittedAttempt(t, h))
+
+	rec := call(t, h, http.MethodGet, "/v1/reviews", reviewerID, "reviewer", "")
+	expectStatus(t, rec, http.StatusOK, "own list")
+	if !strings.Contains(rec.Body.String(), reviewID) {
+		t.Fatalf("the reviewer's draft should be listed, got %s", rec.Body.String())
+	}
+
+	rec = call(t, h, http.MethodGet, "/v1/reviews", "44444444-4444-4444-4444-444444444444", "reviewer", "")
+	expectStatus(t, rec, http.StatusOK, "other reviewer")
+	if strings.Contains(rec.Body.String(), reviewID) {
+		t.Fatalf("another reviewer's draft leaked: %s", rec.Body.String())
+	}
+	expectStatus(t, call(t, h, http.MethodGet, "/v1/reviews", candidateA, "candidate", ""), http.StatusForbidden, "candidate")
 }

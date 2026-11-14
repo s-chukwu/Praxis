@@ -19,6 +19,17 @@ type ReviewStore interface {
 	SaveCriticalFindings(ctx context.Context, reviewID string, reviewer store.Actor, findings []store.FindingInput) error
 	ListDimensionScores(ctx context.Context, reviewID string) ([]store.DimensionScore, error)
 	ListCriticalFindings(ctx context.Context, reviewID string) ([]store.Finding, error)
+	ListReviewerReviews(ctx context.Context, reviewerID string) ([]store.Review, error)
+}
+
+// reviewSummary is one row in a reviewer's "My reviews" list.
+type reviewSummary struct {
+	ID              string     `json:"id"`
+	AttemptID       string     `json:"attempt_id"`
+	FinalizedAt     *time.Time `json:"finalized_at"`
+	WeightedScore   *float64   `json:"weighted_score"`
+	ProposedOutcome *string    `json:"proposed_outcome"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type reviewHandlers struct {
@@ -34,6 +45,7 @@ func registerReviewRoutes(mux *http.ServeMux, authn Authenticator, reviews Revie
 	signedIn := requireRole(authn)
 	reviewer := requireRole(authn, "reviewer")
 
+	mux.Handle("GET /v1/reviews", reviewer(http.HandlerFunc(h.mine)))
 	mux.Handle("POST /v1/attempts/{id}/review", reviewer(http.HandlerFunc(h.start)))
 	mux.Handle("GET /v1/reviews/{id}", signedIn(http.HandlerFunc(h.get)))
 	mux.Handle("PUT /v1/reviews/{id}/scores", reviewer(http.HandlerFunc(h.saveScores)))
@@ -174,6 +186,35 @@ func (h *reviewHandlers) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.respondWithReview(w, r, review, http.StatusCreated)
+}
+
+// mine lists the caller's own reviews, so a reviewer can resume a draft.
+func (h *reviewHandlers) mine(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	caller, ok := callerOf(w, r)
+	if !ok {
+		return
+	}
+
+	items, err := h.reviews.ListReviewerReviews(r.Context(), caller.UserID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	out := make([]reviewSummary, 0, len(items))
+	for _, rv := range items {
+		out = append(out, reviewSummary{
+			ID:              rv.ID,
+			AttemptID:       rv.AttemptID,
+			FinalizedAt:     rv.FinalizedAt,
+			WeightedScore:   rv.WeightedScore,
+			ProposedOutcome: rv.ProposedOutcome,
+			CreatedAt:       rv.CreatedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"reviews": out})
 }
 
 // get returns a review. Someone who may not see it gets a 404, not a 403.

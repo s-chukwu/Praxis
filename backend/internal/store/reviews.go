@@ -444,6 +444,27 @@ func (s *Store) ListDimensionScores(ctx context.Context, reviewID string) ([]Dim
 	return out, rows.Err()
 }
 
+// ListReviewerReviews returns one reviewer's reviews, drafts first, then newest first.
+func (s *Store) ListReviewerReviews(ctx context.Context, reviewerID string) ([]Review, error) {
+	rows, err := s.pool.Query(ctx,
+		`select `+reviewColumns+` from reviews where reviewer_id = $1
+		 order by finalized_at is not null, created_at desc limit 200`, reviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Review
+	for rows.Next() {
+		r, err := scanReview(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) ListCriticalFindings(ctx context.Context, reviewID string) ([]Finding, error) {
 	rows, err := s.pool.Query(ctx,
 		`select event_type, supporting_quote, policy_reference, decision::text
