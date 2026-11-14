@@ -39,10 +39,12 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	var scorer Scorer
 	var planner Planner
 	var catalog CatalogReader
+	var packets PacketReader
 	if client, err := aiclient.New(cfg.AIServiceURL, cfg.AIServiceSharedSecret); err == nil {
 		scorer = client
 		planner = client
 		catalog = client
+		packets = client
 	}
 
 	mux := http.NewServeMux()
@@ -60,6 +62,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerFinalizeRoute(mux, authn, reviews, finalizer, scorer)
 	registerPlanRoutes(mux, authn, reviews, plans, planner)
 	registerBaselineRoute(mux, authn, catalog, cfg.BaselineScenarioID)
+	registerAssessorRoute(mux, authn, reviews, packets)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
