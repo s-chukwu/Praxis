@@ -13,6 +13,39 @@ import AuthShowcase from './AuthShowcase';
 type Errors = Partial<Record<'name' | 'email' | 'password' | 'confirm' | 'form', string>>;
 type View = 'signin' | 'forgot' | 'recovery';
 
+const NAME_PATTERN = /^[\p{L}][\p{L}\p{M}'’ .-]*$/u;
+const EMAIL_PATTERN = /^(?!.*\.\.)[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/;
+
+function sanitizeName(value: string) {
+  return value.replace(/[^\p{L}\p{M}'’ .-]/gu, '');
+}
+
+function cleanName(value: string) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function validateName(value: string) {
+  const name = cleanName(value);
+  if (name.length < 2) return 'Enter your full name.';
+  if (!NAME_PATTERN.test(name)) return 'Use letters, spaces, hyphens, apostrophes, and periods only.';
+  return '';
+}
+
+function validateEmail(value: string) {
+  const email = value.trim();
+  if (!email) return 'Enter your email address.';
+  if (!EMAIL_PATTERN.test(email)) return 'Enter a valid email address.';
+  return '';
+}
+
+function validateNewPassword(value: string) {
+  if (!value) return 'Choose a password.';
+  if (value.length < 8 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+    return 'Use at least 8 characters, including a letter and a number.';
+  }
+  return '';
+}
+
 // Supabase's messages are written for developers; learners get what happened and what to do next.
 function authMessage(raw: string) {
   if (/email not confirmed/i.test(raw)) return 'Confirm your email first. Open the link we sent you, then sign in.';
@@ -128,26 +161,30 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanEmail = email.trim();
     const found: Errors = {};
-    if (signup && !name.trim()) found.name = 'Enter your full name.';
-    if (!/^\S+@\S+\.\S+$/.test(email)) found.email = 'Enter a valid email address.';
     if (signup) {
-      const hasLetter = /[A-Za-z]/.test(password);
-      const hasNumber = /\d/.test(password);
-      if (password.length < 8 || !hasLetter || !hasNumber) {
-        found.password = 'Use at least 8 characters, including a letter and a number.';
-      }
+      const nameMessage = validateName(name);
+      if (nameMessage) found.name = nameMessage;
+    }
+    const emailMessage = validateEmail(cleanEmail);
+    if (emailMessage) found.email = emailMessage;
+    if (signup) {
+      const passwordMessage = validateNewPassword(password);
+      if (passwordMessage) found.password = passwordMessage;
     } else if (!password) {
       found.password = 'Enter your password.';
     }
     setErrors(found);
     if (Object.keys(found).length) return;
+    if (signup) setName(cleanName(name));
+    setEmail(cleanEmail);
     if (!supabase) return setErrors({ form: 'Sign-in is not configured on this server yet.' });
 
     setBusy(true);
     const { data, error } = signup
-      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: name.trim() } } })
-      : await supabase.auth.signInWithPassword({ email, password });
+      ? await supabase.auth.signUp({ email: cleanEmail, password, options: { data: { full_name: cleanName(name) } } })
+      : await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     setBusy(false);
 
     if (error) {
@@ -155,13 +192,13 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
       setUnconfirmed(/email not confirmed/i.test(error.message));
       return setErrors({ form: authMessage(error.message) });
     }
-    if (signup && !data.session) return setNotice(`We sent a confirmation link to ${email}. Open it, then sign in.`);
+    if (signup && !data.session) return setNotice(`We sent a confirmation link to ${cleanEmail}. Open it, then sign in.`);
     await refresh();
     router.replace(signup ? '/onboarding' : '/dashboard');
   };
 
   const resend = async () => {
-    const { error } = (await supabase?.auth.resend({ type: 'signup', email })) ?? {};
+    const { error } = (await supabase?.auth.resend({ type: 'signup', email: email.trim() })) ?? {};
     if (error) {
       report(error);
       return setErrors({ form: authMessage(error.message) });
@@ -181,7 +218,7 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
   };
 
   const goToForgot = (seedEmail: string) => {
-    setResetEmail(seedEmail);
+    setResetEmail(seedEmail.trim());
     setResetSent(false);
     setErrors({});
     setView('forgot');
@@ -190,14 +227,17 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
 
   const sendReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanResetEmail = resetEmail.trim();
     const found: Errors = {};
-    if (!/^\S+@\S+\.\S+$/.test(resetEmail)) found.email = 'Enter a valid email address.';
+    const emailMessage = validateEmail(cleanResetEmail);
+    if (emailMessage) found.email = emailMessage;
     setErrors(found);
     if (Object.keys(found).length) return;
     if (!supabase) return setErrors({ form: 'Sign-in is not configured on this server yet.' });
 
+    setResetEmail(cleanResetEmail);
     setBusy(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanResetEmail, {
       redirectTo: `${window.location.origin}/login?recovery=1`,
     });
     setBusy(false);
@@ -217,11 +257,8 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
   const updatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const found: Errors = {};
-    const hasLetter = /[A-Za-z]/.test(newPassword);
-    const hasNumber = /\d/.test(newPassword);
-    if (newPassword.length < 8 || !hasLetter || !hasNumber) {
-      found.password = 'Use at least 8 characters, including a letter and a number.';
-    }
+    const passwordMessage = validateNewPassword(newPassword);
+    if (passwordMessage) found.password = passwordMessage;
     if (confirmPassword !== newPassword) found.confirm = 'The passwords do not match.';
     setErrors(found);
     if (Object.keys(found).length) return;
@@ -353,11 +390,21 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
                   disabled={resent}
                   className="text-sm font-semibold text-brand-ink underline disabled:no-underline disabled:opacity-70"
                 >
-                  {resent ? `Confirmation email sent to ${email}` : 'Resend confirmation email'}
+                  {resent ? `Confirmation email sent to ${email.trim()}` : 'Resend confirmation email'}
                 </button>
               )}
               {signup && (
-                <Input id="name" label="Full name" autoComplete="name" value={name} error={errors.name} onChange={(e) => setName(e.target.value)} />
+                <Input
+                  id="name"
+                  label="Full name"
+                  autoComplete="name"
+                  value={name}
+                  error={errors.name}
+                  onChange={(e) => {
+                    setName(sanitizeName(e.target.value));
+                    if (errors.name) setErrors((current) => ({ ...current, name: undefined }));
+                  }}
+                />
               )}
               <Input id="email" label="Email" type="email" autoComplete="email" value={email} error={errors.email} onChange={(e) => setEmail(e.target.value)} />
               <Input
