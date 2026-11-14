@@ -1,24 +1,74 @@
 'use client';
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Clock } from 'lucide-react';
 import Textarea from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 
 export type Scenario = { id: string; brief: string; timeboxMinutes: number };
 
-const fields = [
-  { id: 'customer_reply', label: 'Reply to the customer', rows: 6 },
-  { id: 'internal_note', label: 'Internal note for your team', rows: 3 },
-  { id: 'verification_steps', label: 'Verification steps', hint: 'Three to five steps, one per line.', rows: 4 },
-  { id: 'ai_record', label: 'How you used AI (optional)', hint: 'Paste the AI draft and what you changed.', rows: 3 },
+type Field = {
+  id: string;
+  label: string;
+  hint?: string;
+  rows: number;
+  required?: boolean;
+};
+
+const fields: Field[] = [
+  {
+    id: 'customer_reply',
+    label: 'Your reply to the customer',
+    hint: 'Write the reply you would send. Use plain language.',
+    rows: 6,
+    required: true,
+  },
+  {
+    id: 'internal_note',
+    label: 'Internal note for your team',
+    hint: 'Add anything your team needs to know about this case.',
+    rows: 3,
+    required: true,
+  },
+  {
+    id: 'verification_steps',
+    label: 'How you would check your answer',
+    hint: 'Three to five steps, one per line. Explain how you would confirm the reply is correct.',
+    rows: 4,
+    required: true,
+  },
+  {
+    id: 'ai_record',
+    label: 'How you used AI (optional)',
+    hint: 'Paste the AI draft and what you changed.',
+    rows: 3,
+  },
 ];
 
 export default function BaselineForm({ scenario }: { scenario?: Scenario }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState('');
   const [message, setMessage] = useState('');
 
-  const submit = (e: React.FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
+    const found: Record<string, string> = {};
+    for (const field of fields) {
+      if (field.required && !answers[field.id]?.trim()) {
+        found[field.id] = 'This answer is required.';
+      }
+    }
+
+    setErrors(found);
+    if (Object.keys(found).length) {
+      setFormError('Answer the required questions before submitting.');
+      setMessage('');
+      const first = fields.find((field) => found[field.id]);
+      if (first) document.getElementById(first.id)?.focus();
+      return;
+    }
+
+    setFormError('');
     setMessage('Submitting opens once the assessment service is connected. Your answers stay on this page until then.');
   };
 
@@ -41,17 +91,32 @@ export default function BaselineForm({ scenario }: { scenario?: Scenario }) {
       </section>
 
       <div className="space-y-6">
-        {fields.map((f) => (
+        {fields.map((field) => (
           <Textarea
-            key={f.id}
-            id={f.id}
-            label={f.label}
-            hint={f.hint}
-            rows={f.rows}
-            value={answers[f.id] ?? ''}
-            onChange={(e) => setAnswers((a) => ({ ...a, [f.id]: e.target.value }))}
+            key={field.id}
+            id={field.id}
+            label={field.label}
+            hint={field.hint}
+            error={errors[field.id]}
+            rows={field.rows}
+            value={answers[field.id] ?? ''}
+            onChange={(e) => {
+              setAnswers((current) => ({ ...current, [field.id]: e.target.value }));
+              if (errors[field.id]) {
+                setErrors((current) => {
+                  const next = { ...current };
+                  delete next[field.id];
+                  return next;
+                });
+              }
+            }}
           />
         ))}
+        {formError && (
+          <p role="alert" className="rounded-control bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
+            {formError}
+          </p>
+        )}
         {message && (
           <p role="status" className="rounded-control bg-progress-soft px-4 py-3 text-sm text-[#7A4E09]">
             {message}

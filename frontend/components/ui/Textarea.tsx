@@ -1,9 +1,10 @@
 import type { TextareaHTMLAttributes } from 'react';
-import { fieldControl, fieldHint, fieldLabel } from './field';
+import { fieldControl, fieldError, fieldHint, fieldLabel } from './field';
 
-type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; id: string; hint?: string };
+type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; id: string; hint?: string; error?: string };
 
-export default function Textarea({ label, id, hint, ...props }: Props) {
+export default function Textarea({ label, id, hint, error, ...props }: Props) {
+  const note = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
   return (
     <div>
       <label htmlFor={id} className={fieldLabel}>
@@ -11,14 +12,21 @@ export default function Textarea({ label, id, hint, ...props }: Props) {
       </label>
       <textarea
         id={id}
-        aria-describedby={hint ? `${id}-hint` : undefined}
+        aria-invalid={Boolean(error)}
+        aria-describedby={note}
         {...props}
-        className={`${fieldControl()} resize-y leading-relaxed`}
+        className={`${fieldControl(Boolean(error))} resize-y leading-relaxed`}
       />
-      {hint && (
-        <p id={`${id}-hint`} className={fieldHint}>
-          {hint}
+      {error ? (
+        <p id={note} className={fieldError}>
+          {error}
         </p>
+      ) : (
+        hint && (
+          <p id={note} className={fieldHint}>
+            {hint}
+          </p>
+        )
       )}
     </div>
   );
