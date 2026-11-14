@@ -53,10 +53,10 @@ export default function CvDropzone({ onText }: { onText: (text: string) => void 
         <span className="mt-3 font-semibold">
           {reading ? 'Reading your file…' : fileName ? fileName : dragging ? 'Drop it here' : 'Drop your CV here or choose a file'}
         </span>
-        <span className="mt-1 text-sm text-muted">{fileName ? 'Text added below. Choose another file to replace it.' : 'PDF, Word (.docx) or text, up to 5 MB'}</span>
+        <span className="mt-1 text-sm text-muted">{fileName ? 'Text added below. Choose another file to replace it.' : 'PDF only, up to 5 MB'}</span>
         <input
           type="file"
-          accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+          accept=".pdf,application/pdf"
           className="sr-only"
           onChange={(e) => void accept(e.target.files?.[0])}
         />
