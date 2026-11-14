@@ -484,3 +484,14 @@ func (s *Store) ListCriticalFindings(ctx context.Context, reviewID string) ([]Fi
 	}
 	return out, rows.Err()
 }
+
+// GetFinalizedReview returns the one finalized review of an attempt, or ErrNotFound.
+func (s *Store) GetFinalizedReview(ctx context.Context, attemptID string) (Review, error) {
+	row := s.pool.QueryRow(ctx,
+		`select `+reviewColumns+` from reviews where attempt_id = $1 and finalized_at is not null`, attemptID)
+	r, err := scanReview(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Review{}, ErrNotFound
+	}
+	return r, err
+}
