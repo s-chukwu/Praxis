@@ -23,7 +23,7 @@ function authMessage(raw: string) {
   if (/invalid login/i.test(raw)) return 'That email and password do not match.';
   if (/already registered|already exists/i.test(raw)) return 'An account with this email already exists. Sign in instead.';
   if (/rate limit|too many/i.test(raw)) return 'Too many attempts. Wait a minute, then try again.';
-  if (/password/i.test(raw)) return 'Choose a stronger password: at least 8 characters, mixing letters and numbers.';
+  if (/password/i.test(raw)) return 'Choose a stronger password: at least 8 characters, including a letter and a number.';
   return 'We could not create or open your account just now. Try again in a minute.';
 }
 
@@ -43,7 +43,15 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
     const found: Errors = {};
     if (signup && !name.trim()) found.name = 'Enter your full name.';
     if (!/^\S+@\S+\.\S+$/.test(email)) found.email = 'Enter a valid email address.';
-    if (password.length < 8) found.password = 'Use at least 8 characters.';
+    if (signup) {
+      const hasLetter = /[A-Za-z]/.test(password);
+      const hasNumber = /\d/.test(password);
+      if (password.length < 8 || !hasLetter || !hasNumber) {
+        found.password = 'Use at least 8 characters, including a letter and a number.';
+      }
+    } else if (!password) {
+      found.password = 'Enter your password.';
+    }
     setErrors(found);
     if (Object.keys(found).length) return;
     if (!supabase) return setErrors({ form: 'Sign-in is not configured on this server yet.' });
@@ -94,7 +102,7 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
                 label="Password"
                 type="password"
                 autoComplete={signup ? 'new-password' : 'current-password'}
-                hint={signup ? 'At least 8 characters.' : undefined}
+                hint={signup ? 'At least 8 characters, including a letter and a number.' : undefined}
                 value={password}
                 error={errors.password}
                 onChange={(e) => setPassword(e.target.value)}
