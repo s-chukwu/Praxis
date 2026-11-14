@@ -20,6 +20,7 @@ function nextPath() {
 
 // Supabase's messages are written for developers; learners get what happened and what to do next.
 function authMessage(raw: string) {
+  if (/email not confirmed/i.test(raw)) return 'Confirm your email first. Open the link we sent you, then sign in.';
   if (/invalid login/i.test(raw)) return 'That email and password do not match.';
   if (/already registered|already exists/i.test(raw)) return 'An account with this email already exists. Sign in instead.';
   if (/rate limit|too many/i.test(raw)) return 'Too many attempts. Wait a minute, then try again.';
@@ -37,6 +38,8 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
   const [errors, setErrors] = useState<Errors>({});
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,11 +59,21 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
 
     if (error) {
       report(error);
+      setUnconfirmed(/email not confirmed/i.test(error.message));
       return setErrors({ form: authMessage(error.message) });
     }
     if (signup && !data.session) return setNotice(`We sent a confirmation link to ${email}. Open it, then sign in.`);
     await refresh();
     router.replace(signup ? '/onboarding' : nextPath());
+  };
+
+  const resend = async () => {
+    const { error } = (await supabase?.auth.resend({ type: 'signup', email })) ?? {};
+    if (error) {
+      report(error);
+      return setErrors({ form: authMessage(error.message) });
+    }
+    setResent(true);
   };
 
   return (
@@ -84,6 +97,11 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
                 <div role="alert" className="rounded-control bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
                   {errors.form}
                 </div>
+              )}
+              {unconfirmed && (
+                <button type="button" onClick={resend} disabled={resent} className="text-sm font-semibold text-brand-ink underline disabled:no-underline disabled:opacity-70">
+                  {resent ? `Confirmation email sent to ${email}` : 'Resend confirmation email'}
+                </button>
               )}
               {signup && (
                 <Input id="name" label="Full name" autoComplete="name" value={name} error={errors.name} onChange={(e) => setName(e.target.value)} />
