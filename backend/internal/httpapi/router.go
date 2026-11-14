@@ -27,7 +27,9 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	var reviews ReviewStore
 	var finalizer Finalizer
 	var plans PlanStore
+	var roles RoleStore
 	if db != nil {
+		roles = db
 		attempts = db
 		reviews = db
 		finalizer = db
@@ -64,6 +66,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerBaselineRoute(mux, authn, catalog, cfg.BaselineScenarioID)
 	registerAssessorRoute(mux, authn, reviews, packets)
 	registerQueueRoute(mux, authn, attempts, reviews)
+	registerAdminRoutes(mux, authn, roles)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
