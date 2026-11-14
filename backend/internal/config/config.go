@@ -11,6 +11,7 @@ type Config struct {
 	SupabaseURL            string
 	SupabaseAnonKey        string
 	SupabaseServiceRoleKey string
+	BaselineScenarioID     string
 }
 
 func Load() Config {
@@ -23,6 +24,7 @@ func Load() Config {
 		SupabaseURL:            os.Getenv("SUPABASE_URL"),
 		SupabaseAnonKey:        os.Getenv("SUPABASE_ANON_KEY"),
 		SupabaseServiceRoleKey: os.Getenv("SUPABASE_SERVICE_ROLE_KEY"),
+		BaselineScenarioID:     getEnv("BASELINE_SCENARIO_ID", "CS-01-A"),
 	}
 }
 
