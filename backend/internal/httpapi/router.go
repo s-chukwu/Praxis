@@ -29,9 +29,11 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	var finalizer Finalizer
 	var plans PlanStore
 	var roles RoleStore
-	if db != nil {
+	var userLister UserLister
 
+	if db != nil {
 		roles = db
+		userLister = db
 		attempts = db
 		baselineStarter = db
 		reviews = db
@@ -61,9 +63,9 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 		panic("sentry test")
 	})
 
+
 	mux.Handle("GET /v1/me", requireRole(authn)(http.HandlerFunc(me)))
 	registerAttemptRoutes(mux, authn, attempts)
-
 	registerReviewRoutes(mux, authn, reviews)
 	registerFinalizeRoute(mux, authn, reviews, finalizer, scorer)
 	registerPlanRoutes(mux, authn, reviews, plans, planner)
@@ -72,6 +74,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerAssessorRoute(mux, authn, reviews, packets)
 	registerQueueRoute(mux, authn, attempts, reviews)
 	registerAdminRoutes(mux, authn, roles)
+	registerAdminUsersRoute(mux, authn, userLister)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
