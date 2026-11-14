@@ -164,3 +164,45 @@ func TestBaselineStartAnswers503WhenNotConfigured(t *testing.T) {
 	expectStatus(t, rec, http.StatusServiceUnavailable, "nothing configured")
 
 }
+
+const pinnedCatalogJSON = `{"current":{"scenarios":"1.2.0","role_standard":"1.0.0","allocation_policy":"1.0.0"},
+	"scenario_banks":[{"version":"1.2.0","scenarios":[{"id":"CS-01-A","stage":"baseline","rubric_version":"0.2.0",
+	"timebox_minutes":12,"expected_artifacts":["customer_reply"],"candidate_brief":"A customer was debited twice."}]}]}`
+
+func newPinnedStartRouter() (http.Handler, *startFakeStarter) {
+	starter := newStartFakeStarter()
+	mux := http.NewServeMux()
+	registerBaselineStartRoute(mux, fakeAuth{}, &fakeCatalog{response: pinnedCatalogJSON}, starter, "CS-01-A")
+	return mux, starter
+}
+
+func TestBaselineStartUsesTheProgramAndCatalogVersions(t *testing.T) {
+	h, _ := newPinnedStartRouter()
+	rec := call(t, h, http.MethodPost, "/v1/attempts/baseline", candidateA, "candidate", `{"program":"builder"}`)
+	expectStatus(t, rec, http.StatusCreated, "builder start")
+	for _, want := range []string{`"target_track":"builder"`, `"scenario_version":"1.2.0"`, `"rubric_version":"0.2.0"`,
+		`"role_standard_version":"1.0.0"`, `"policy_version":"1.0.0"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("missing %s in %s", want, rec.Body.String())
+		}
+	}
+}
+
+func TestBaselineStartRefusesUnknownProgramsAndVoidedAttempts(t *testing.T) {
+	h, starter := newPinnedStartRouter()
+	expectStatus(t, call(t, h, http.MethodPost, "/v1/attempts/baseline", candidateA, "candidate", `{"program":"pilot"}`),
+		http.StatusUnprocessableEntity, "unknown program")
+	if starter.count != 0 {
+		t.Fatalf("a refused call must not create an attempt")
+	}
+
+	expectStatus(t, call(t, h, http.MethodPost, "/v1/attempts/baseline", candidateA, "candidate", ""), http.StatusCreated, "start")
+	voided := starter.byCandidate[candidateA]
+	voided.Status = workflow.Voided
+	starter.byCandidate[candidateA] = voided
+	rec := call(t, h, http.MethodPost, "/v1/attempts/baseline", candidateA, "candidate", "")
+	expectStatus(t, rec, http.StatusConflict, "voided")
+	if !strings.Contains(rec.Body.String(), "baseline_voided") {
+		t.Fatalf("expected baseline_voided, got %s", rec.Body.String())
+	}
+}
