@@ -63,6 +63,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerPlanRoutes(mux, authn, reviews, plans, planner)
 	registerBaselineRoute(mux, authn, catalog, cfg.BaselineScenarioID)
 	registerAssessorRoute(mux, authn, reviews, packets)
+	registerQueueRoute(mux, authn, attempts, reviews)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
