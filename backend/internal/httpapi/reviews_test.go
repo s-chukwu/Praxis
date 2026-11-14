@@ -36,7 +36,17 @@ func (f *fakeReviews) StartReview(ctx context.Context, attemptID string, reviewe
 	if a.CandidateID == reviewer.ID {
 		return store.Review{}, workflow.ErrSelfReview
 	}
-	if a.Status != workflow.Submitted {
+	if a.Status == workflow.UnderReview {
+		for _, r := range f.reviews {
+			if r.AttemptID == attemptID && r.FinalizedAt == nil {
+				if r.ReviewerID != reviewer.ID {
+					return store.Review{}, store.ErrReviewTaken
+				}
+				return r, nil
+			}
+		}
+	}
+	if a.Status != workflow.Submitted && a.Status != workflow.UnderReview {
 		return store.Review{}, fmt.Errorf("%w: attempt is %s", store.ErrWrongState, a.Status)
 	}
 
@@ -52,6 +62,16 @@ func (f *fakeReviews) StartReview(ctx context.Context, attemptID string, reviewe
 	}
 	f.reviews[review.ID] = review
 	return review, nil
+}
+
+func (f *fakeReviews) ListReviewerReviews(ctx context.Context, reviewerID string) ([]store.Review, error) {
+	var out []store.Review
+	for _, r := range f.reviews {
+		if r.ReviewerID == reviewerID {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeReviews) GetReview(ctx context.Context, id string) (store.Review, error) {
@@ -245,4 +265,38 @@ func TestReviewRoutesAnswer503WithoutADatabase(t *testing.T) {
 
 	rec := call(t, mux, http.MethodGet, "/v1/reviews/"+reviewerID, reviewerID, "reviewer", "")
 	expectStatus(t, rec, http.StatusServiceUnavailable, "no database")
+}
+
+func TestStartingAReviewAgainReturnsTheSameDraft(t *testing.T) {
+	h, _ := newReviewTestRouter()
+	attemptID := submittedAttempt(t, h)
+	first := startedReview(t, h, attemptID)
+	again := startedReview(t, h, attemptID)
+	if again != first {
+		t.Fatalf("a reload must return the same draft, got %s then %s", first, again)
+	}
+
+	rec := call(t, h, http.MethodPost, "/v1/attempts/"+attemptID+"/review", "44444444-4444-4444-4444-444444444444", "reviewer", "")
+	expectStatus(t, rec, http.StatusConflict, "second reviewer")
+	if !strings.Contains(rec.Body.String(), "review_taken") {
+		t.Fatalf("expected review_taken, got %s", rec.Body.String())
+	}
+}
+
+func TestReviewersListOnlyTheirOwnReviews(t *testing.T) {
+	h, _ := newReviewTestRouter()
+	reviewID := startedReview(t, h, submittedAttempt(t, h))
+
+	rec := call(t, h, http.MethodGet, "/v1/reviews", reviewerID, "reviewer", "")
+	expectStatus(t, rec, http.StatusOK, "own list")
+	if !strings.Contains(rec.Body.String(), reviewID) {
+		t.Fatalf("the reviewer's draft should be listed, got %s", rec.Body.String())
+	}
+
+	rec = call(t, h, http.MethodGet, "/v1/reviews", "44444444-4444-4444-4444-444444444444", "reviewer", "")
+	expectStatus(t, rec, http.StatusOK, "other reviewer")
+	if strings.Contains(rec.Body.String(), reviewID) {
+		t.Fatalf("another reviewer's draft leaked: %s", rec.Body.String())
+	}
+	expectStatus(t, call(t, h, http.MethodGet, "/v1/reviews", candidateA, "candidate", ""), http.StatusForbidden, "candidate")
 }

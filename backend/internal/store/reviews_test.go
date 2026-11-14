@@ -62,6 +62,15 @@ func TestReviewFlow(t *testing.T) {
 		t.Fatalf("start review: %v", err)
 	}
 
+	again, err := startReview(ctx, tx, attempt.ID, reviewer)
+	if err != nil || again.ID != review.ID {
+		t.Fatalf("starting again should return the same draft, got %v %v", again.ID, err)
+	}
+	_, err = startReview(ctx, tx, attempt.ID, Actor{ID: "00000000-0000-4000-8000-000000000001", Role: workflow.Reviewer})
+	if !errors.Is(err, ErrReviewTaken) {
+		t.Fatalf("a second reviewer must be refused, got %v", err)
+	}
+
 	var status string
 	if err := tx.QueryRow(ctx, "select status::text from attempts where id = $1", attempt.ID).Scan(&status); err != nil {
 		t.Fatal(err)

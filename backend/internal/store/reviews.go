@@ -19,6 +19,7 @@ var (
 	ErrWrongState      = errors.New("attempt is not in a state that allows this")
 	ErrReviewNotYours  = errors.New("review not found or not owned by this reviewer")
 	ErrReviewFinalized = errors.New("review is already finalized")
+	ErrReviewTaken     = errors.New("another reviewer is already reviewing this attempt")
 	ErrPendingFindings = errors.New("every critical finding must be confirmed or dismissed before finalizing")
 	ErrNoScores        = errors.New("a review needs at least one dimension score")
 	ErrInvalidInput    = errors.New("invalid input")
@@ -214,6 +215,20 @@ func startReview(ctx context.Context, q querier, attemptID string, reviewer Acto
 			return Review{}, err
 		}
 	case workflow.UnderReview:
+		// The attempt row is locked above, so two reviewers cannot both get past this check.
+		row := q.QueryRow(ctx,
+			`select `+reviewColumns+` from reviews
+			 where attempt_id = $1 and finalized_at is null
+			 order by created_at limit 1`, attemptID)
+		draft, err := scanReview(row)
+		switch {
+		case err == nil && draft.ReviewerID == reviewer.ID:
+			return draft, nil
+		case err == nil:
+			return Review{}, ErrReviewTaken
+		case !errors.Is(err, pgx.ErrNoRows):
+			return Review{}, err
+		}
 	default:
 		return Review{}, fmt.Errorf("%w: attempt is %s", ErrWrongState, attempt.Status)
 	}
@@ -425,6 +440,27 @@ func (s *Store) ListDimensionScores(ctx context.Context, reviewID string) ([]Dim
 			return nil, err
 		}
 		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// ListReviewerReviews returns one reviewer's reviews, drafts first, then newest first.
+func (s *Store) ListReviewerReviews(ctx context.Context, reviewerID string) ([]Review, error) {
+	rows, err := s.pool.Query(ctx,
+		`select `+reviewColumns+` from reviews where reviewer_id = $1
+		 order by finalized_at is not null, created_at desc limit 200`, reviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Review
+	for rows.Next() {
+		r, err := scanReview(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
 	}
 	return out, rows.Err()
 }
