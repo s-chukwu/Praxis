@@ -150,7 +150,7 @@ func TestPlanIsBuiltFromTheFinalizedReview(t *testing.T) {
 	for _, want := range []string{
 		`"candidate_id":"` + candidateA + `"`,
 		`"target_track":"operator"`,
-		`"reviewed_competencies":{"C1":3,"C2":4}`,
+		`"reviewed_competencies":{"C1":3,"C2":4,"C3":3,"C4":2,"C5":3,"C6":3}`,
 		`"verified_completed_modules":["M-ROLE"]`,
 	} {
 		if !strings.Contains(planner.lastBody, want) {
