@@ -27,11 +27,18 @@ type baselineScenario struct {
 	Brief          string   `json:"brief"`
 	TimeboxMinutes int      `json:"timebox_minutes"`
 	Fields         []string `json:"fields"`
+
+	// Versions pinned on the attempt when it is created; never sent to the browser.
+	RubricVersion       string `json:"-"`
+	RoleStandardVersion string `json:"-"`
+	PolicyVersion       string `json:"-"`
 }
 
 type catalogBody struct {
 	Current struct {
-		Scenarios string `json:"scenarios"`
+		Scenarios        string `json:"scenarios"`
+		RoleStandard     string `json:"role_standard"`
+		AllocationPolicy string `json:"allocation_policy"`
 	} `json:"current"`
 	ScenarioBanks []struct {
 		Version   string `json:"version"`
@@ -41,6 +48,7 @@ type catalogBody struct {
 			TimeboxMinutes    int      `json:"timebox_minutes"`
 			ExpectedArtifacts []string `json:"expected_artifacts"`
 			CandidateBrief    string   `json:"candidate_brief"`
+			RubricVersion     string   `json:"rubric_version"`
 		} `json:"scenarios"`
 	} `json:"scenario_banks"`
 }
@@ -81,6 +89,10 @@ func pick(raw json.RawMessage, scenarioID string) (baselineScenario, error) {
 					Brief:          s.CandidateBrief,
 					TimeboxMinutes: s.TimeboxMinutes,
 					Fields:         s.ExpectedArtifacts,
+
+					RubricVersion:       s.RubricVersion,
+					RoleStandardVersion: body.Current.RoleStandard,
+					PolicyVersion:       body.Current.AllocationPolicy,
 				}, nil
 			}
 		}
