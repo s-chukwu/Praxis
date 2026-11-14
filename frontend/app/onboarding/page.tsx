@@ -84,7 +84,7 @@ export default function Onboarding() {
           <section>
             <h1 className="text-[34px] font-bold leading-tight">Add your CV</h1>
             <p className="mt-2 max-w-xl text-muted">
-              We suggest skills from your CV and you confirm them. Your baseline task still decides your plan.
+              Tell us which skills you already use. Your baseline task still decides your plan.
             </p>
             <div className="mt-8">
               <CvConsent onDone={finish} />

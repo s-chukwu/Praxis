@@ -68,7 +68,10 @@ echo
 
 check_body "backend health" 200 '"status":"ok"' "$BACKEND_URL/health"
 check_status "backend requires auth on /v1/me" 401 "$BACKEND_URL/v1/me"
-check_body "web renders backend status" 200 'Backend:' "$WEB_URL/"
+check_status "baseline start requires auth" 401 "$BACKEND_URL/v1/attempts/baseline" \
+  -X POST -H 'Content-Type: application/json' -d '{}'
+check_status "reviewer queue requires auth" 401 "$BACKEND_URL/v1/review-queue"
+check_body "web landing page renders" 200 'Prove what you can do' "$WEB_URL/"
 check_body "ai health" 200 '"status":"ok"' "$AI_URL/health"
 check_status "ai rejects unsigned internal call" 401 "$AI_URL/internal/v1/diagnostics/score" \
   -X POST -H 'Content-Type: application/json' -d '{}'

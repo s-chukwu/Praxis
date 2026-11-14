@@ -1,4 +1,4 @@
-import { ListOrdered } from 'lucide-react';
+import { Check, ListOrdered } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { courseNames, skillNames } from '@/lib/catalog';
 import type { PlanReason, Progress } from '@/lib/baseline';
@@ -77,20 +77,46 @@ export default function PlanList({ progress }: { progress: Progress | null }) {
           <p className="mt-1 text-sm text-muted">They appear here as soon as your plan is ready.</p>
         </div>
       ) : (
-        <ol className="divide-y divide-line rounded-panel bg-surface shadow-panel">
-          {modules.map((m) => {
-            const why = m.reasons.map(reasonText).filter(Boolean)[0];
-            return (
-              <li key={m.course_code} className="flex gap-4 p-5">
-                <span className="text-xl font-bold leading-7 text-brand">{m.position}</span>
-                <div>
-                  <p className="font-semibold">{m.title || courseNames[m.course_code] || m.course_code}</p>
-                  {why && <p className="mt-0.5 text-sm text-muted">{why}</p>}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+        (() => {
+          // One course gets the spotlight; the rest wait quietly so the plan never reads as a wall.
+          const nextAt = Math.max(0, modules.findIndex((m) => !m.completed_at));
+          const next = modules[nextAt];
+          const why = (m: (typeof modules)[number]) => m.reasons.map(reasonText).filter(Boolean)[0];
+          return (
+            <>
+              <section aria-labelledby="next-course" className="animate-rise rounded-panel bg-ink p-6 text-white shadow-panel">
+                <h2 id="next-course" className="text-sm font-semibold text-white/70">
+                  Start here · course {nextAt + 1} of {modules.length}
+                </h2>
+                <p className="mt-2 text-xl font-bold leading-snug">{next.title || courseNames[next.course_code] || next.course_code}</p>
+                {why(next) && <p className="mt-1.5 text-white/75">{why(next)}</p>}
+              </section>
+              {modules.length > 1 && (
+                <ol className="divide-y divide-line rounded-panel bg-surface shadow-panel">
+                  {modules.map((m, i) => {
+                    if (i === nextAt) return null;
+                    const done = Boolean(m.completed_at);
+                    return (
+                      <li key={m.course_code} className="flex items-start gap-4 p-5">
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums ${
+                            done ? 'bg-brand text-white' : 'bg-page text-muted ring-1 ring-line'
+                          }`}
+                        >
+                          {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} aria-label="Done" /> : m.position}
+                        </span>
+                        <div className="min-w-0">
+                          <p className={`font-semibold ${done ? 'text-ink' : 'text-ink/80'}`}>{m.title || courseNames[m.course_code] || m.course_code}</p>
+                          {why(m) && <p className="mt-0.5 text-sm text-muted">{why(m)}</p>}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </>
+          );
+        })()
       )}
     </div>
   );
