@@ -21,23 +21,33 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 function Frame({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const { learner, ready, loadError, refresh } = useLearner();
+  const { learner, role, ready, loadError, refresh } = useLearner();
   const [menuOpen, setMenuOpen] = useState(false);
   const isPublic = PUBLIC.includes(path);
   const isOnboarding = path.startsWith('/onboarding');
+  const isReviewerArea = path.startsWith('/reviewer');
+  const staff = role === 'reviewer' || role === 'admin';
 
   useEffect(() => setMenuOpen(false), [path]);
 
   useEffect(() => {
     if (!ready || isPublic || loadError) return;
-    if (!learner) router.replace(`/login?next=${encodeURIComponent(path)}`);
-    else if (!learner.onboarded && !isOnboarding) router.replace('/onboarding');
-  }, [ready, learner, loadError, isPublic, isOnboarding, path, router]);
+    if (!learner) return router.replace('/login');
+    // Preview has no real roles, so both areas stay open for demos.
+    if (PREVIEW) {
+      if (!isReviewerArea && !learner.onboarded && !isOnboarding) router.replace('/onboarding');
+      return;
+    }
+    if (staff && !isReviewerArea) router.replace('/reviewer');
+    else if (!staff && isReviewerArea) router.replace('/dashboard');
+    else if (!staff && !learner.onboarded && !isOnboarding) router.replace('/onboarding');
+  }, [ready, learner, loadError, isPublic, isOnboarding, isReviewerArea, staff, path, router]);
 
   if (isPublic) return <>{children}</>;
   if (loadError) return <ErrorScreen message={loadError} onRetry={() => void refresh()} />;
   if (!ready || !learner) return <div className="min-h-screen bg-page" aria-busy="true" />;
-  if (isOnboarding) return <>{children}</>;
+  // The reviewer workspace has its own focus layout, separate from the learner app.
+  if (isOnboarding || isReviewerArea) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen">

@@ -12,12 +12,6 @@ import AuthShowcase from './AuthShowcase';
 
 type Errors = Partial<Record<'name' | 'email' | 'password' | 'form', string>>;
 
-// Only same-site paths, so a crafted ?next= link can't send someone to another domain after sign-in.
-function nextPath() {
-  const next = new URLSearchParams(window.location.search).get('next');
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
-}
-
 // Supabase's messages are written for developers; learners get what happened and what to do next.
 function authMessage(raw: string) {
   if (/email not confirmed/i.test(raw)) return 'Confirm your email first. Open the link we sent you, then sign in.';
@@ -72,7 +66,7 @@ export default function AuthScreen({ mode }: { mode: 'signin' | 'signup' }) {
     }
     if (signup && !data.session) return setNotice(`We sent a confirmation link to ${email}. Open it, then sign in.`);
     await refresh();
-    router.replace(signup ? '/onboarding' : nextPath());
+    router.replace(signup ? '/onboarding' : '/dashboard');
   };
 
   const resend = async () => {
