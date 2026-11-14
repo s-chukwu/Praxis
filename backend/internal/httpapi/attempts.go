@@ -168,6 +168,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, "forbidden", "a reviewer cannot review their own attempt")
 	case errors.Is(err, store.ErrReviewNotYours):
 		writeError(w, http.StatusNotFound, "not_found", "review not found")
+	case errors.Is(err, store.ErrReviewTaken):
+		writeError(w, http.StatusConflict, "review_taken", "another reviewer is already reviewing this attempt")
 	case errors.Is(err, store.ErrReviewFinalized):
 		writeError(w, http.StatusConflict, "review_finalized", "the review is already finalized")
 	case errors.Is(err, store.ErrPendingFindings):

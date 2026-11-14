@@ -36,7 +36,17 @@ func (f *fakeReviews) StartReview(ctx context.Context, attemptID string, reviewe
 	if a.CandidateID == reviewer.ID {
 		return store.Review{}, workflow.ErrSelfReview
 	}
-	if a.Status != workflow.Submitted {
+	if a.Status == workflow.UnderReview {
+		for _, r := range f.reviews {
+			if r.AttemptID == attemptID && r.FinalizedAt == nil {
+				if r.ReviewerID != reviewer.ID {
+					return store.Review{}, store.ErrReviewTaken
+				}
+				return r, nil
+			}
+		}
+	}
+	if a.Status != workflow.Submitted && a.Status != workflow.UnderReview {
 		return store.Review{}, fmt.Errorf("%w: attempt is %s", store.ErrWrongState, a.Status)
 	}
 
@@ -245,4 +255,20 @@ func TestReviewRoutesAnswer503WithoutADatabase(t *testing.T) {
 
 	rec := call(t, mux, http.MethodGet, "/v1/reviews/"+reviewerID, reviewerID, "reviewer", "")
 	expectStatus(t, rec, http.StatusServiceUnavailable, "no database")
+}
+
+func TestStartingAReviewAgainReturnsTheSameDraft(t *testing.T) {
+	h, _ := newReviewTestRouter()
+	attemptID := submittedAttempt(t, h)
+	first := startedReview(t, h, attemptID)
+	again := startedReview(t, h, attemptID)
+	if again != first {
+		t.Fatalf("a reload must return the same draft, got %s then %s", first, again)
+	}
+
+	rec := call(t, h, http.MethodPost, "/v1/attempts/"+attemptID+"/review", "44444444-4444-4444-4444-444444444444", "reviewer", "")
+	expectStatus(t, rec, http.StatusConflict, "second reviewer")
+	if !strings.Contains(rec.Body.String(), "review_taken") {
+		t.Fatalf("expected review_taken, got %s", rec.Body.String())
+	}
 }
