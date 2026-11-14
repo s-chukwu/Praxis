@@ -16,6 +16,18 @@ module.exports = {
       // Self-hosted from npm, so builds never depend on reaching Google Fonts.
       fontFamily: { sans: ['"Figtree Variable"', 'system-ui', 'sans-serif'] },
       borderRadius: { control: '10px', panel: '14px' },
+      keyframes: {
+        rise: { from: { opacity: '0', transform: 'translateY(8px)' }, to: { opacity: '1', transform: 'none' } },
+        pop: { '0%': { transform: 'scale(0.6)' }, '60%': { transform: 'scale(1.12)' }, '100%': { transform: 'scale(1)' } },
+        sweep: { from: { transform: 'translateX(-100%)' }, to: { transform: 'translateX(100%)' } },
+        draw: { from: { strokeDashoffset: '48' }, to: { strokeDashoffset: '0' } },
+      },
+      animation: {
+        rise: 'rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        pop: 'pop 320ms cubic-bezier(0.16, 1, 0.3, 1)',
+        sweep: 'sweep 1.4s ease-in-out infinite',
+        draw: 'draw 600ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both',
+      },
       boxShadow: {
         panel: '0 1px 2px rgba(20, 23, 31, 0.04), 0 4px 16px -6px rgba(20, 23, 31, 0.08)',
         lift: '0 2px 4px rgba(20, 23, 31, 0.06), 0 16px 40px -12px rgba(20, 23, 31, 0.18)',
