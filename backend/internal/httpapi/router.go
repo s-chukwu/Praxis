@@ -24,13 +24,16 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	}
 
 	var attempts AttemptStore
+	var baselineStarter BaselineStarter
 	var reviews ReviewStore
 	var finalizer Finalizer
 	var plans PlanStore
 	var roles RoleStore
 	if db != nil {
+
 		roles = db
 		attempts = db
+		baselineStarter = db
 		reviews = db
 		finalizer = db
 		plans = db
@@ -60,10 +63,12 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 
 	mux.Handle("GET /v1/me", requireRole(authn)(http.HandlerFunc(me)))
 	registerAttemptRoutes(mux, authn, attempts)
+
 	registerReviewRoutes(mux, authn, reviews)
 	registerFinalizeRoute(mux, authn, reviews, finalizer, scorer)
 	registerPlanRoutes(mux, authn, reviews, plans, planner)
-	registerBaselineRoutes(mux, authn, catalog, attempts, cfg.BaselineScenarioID)
+	registerBaselineRoute(mux, authn, catalog, cfg.BaselineScenarioID)
+	registerBaselineStartRoute(mux, authn, catalog, baselineStarter, cfg.BaselineScenarioID)
 	registerAssessorRoute(mux, authn, reviews, packets)
 	registerQueueRoute(mux, authn, attempts, reviews)
 	registerAdminRoutes(mux, authn, roles)

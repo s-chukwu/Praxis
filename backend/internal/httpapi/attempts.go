@@ -24,7 +24,6 @@ var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F-]{36}$`)
 // *store.Store satisfies it, and tests use a fake.
 type AttemptStore interface {
 	CreateAttempt(ctx context.Context, n store.NewAttempt, actor store.Actor) (store.Attempt, error)
-	CreateOrGetBaselineAttempt(ctx context.Context, n store.NewAttempt, actor store.Actor) (store.Attempt, bool, error)
 	GetAttempt(ctx context.Context, id string) (store.Attempt, error)
 	ListCandidateAttempts(ctx context.Context, candidateID string) ([]store.Attempt, error)
 	ListReviewQueue(ctx context.Context) ([]store.Attempt, error)

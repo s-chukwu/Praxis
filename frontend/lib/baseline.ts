@@ -70,7 +70,9 @@ export async function getBaseline(): Promise<Attempt | null> {
 // Safe to call more than once: the backend returns the same attempt.
 export async function startBaseline(program: ProgramId): Promise<Attempt> {
   if (PREVIEW) return previewAttempt() ?? savePreview({ id: 'preview', stage: 'baseline', status: 'in_progress', answers: {}, submitted_at: null });
-  return request<Attempt>('POST', '/v1/baseline/start', { program });
+  const attempt = await request<Attempt>('POST', '/v1/attempts/baseline', { program });
+  // A new attempt starts as assigned; opening it lets the candidate submit later.
+  return attempt.status === 'assigned' ? request<Attempt>('POST', `/v1/attempts/${attempt.id}/start`) : attempt;
 }
 
 export async function saveAnswers(id: string, answers: Answers): Promise<void> {

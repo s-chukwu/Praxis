@@ -39,7 +39,7 @@ func (f *fakeCatalog) Catalog(ctx context.Context, actor aiclient.Actor, request
 
 func newBaselineRouter(catalog CatalogReader, scenarioID string) http.Handler {
 	mux := http.NewServeMux()
-	registerBaselineRoutes(mux, fakeAuth{}, catalog, newFakeAttempts(), scenarioID)
+	registerBaselineRoute(mux, fakeAuth{}, catalog, scenarioID)
 	return mux
 }
 

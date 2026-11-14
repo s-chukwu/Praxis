@@ -57,7 +57,6 @@ var errScenarioMissing = errors.New("baseline scenario not found in the current 
 
 type baselineHandlers struct {
 	catalog    CatalogReader
-	attempts   AttemptStore
 	scenarioID string
 
 	mu       sync.Mutex
@@ -65,12 +64,10 @@ type baselineHandlers struct {
 	cachedAt time.Time
 }
 
-// registerBaselineRoutes wires the candidate's baseline scenario and start routes.
-func registerBaselineRoutes(mux *http.ServeMux, authn Authenticator, catalog CatalogReader, attempts AttemptStore, scenarioID string) {
-	h := &baselineHandlers{catalog: catalog, attempts: attempts, scenarioID: scenarioID}
-	candidate := requireRole(authn, "candidate")
-	mux.Handle("GET /v1/baseline/scenario", candidate(http.HandlerFunc(h.get)))
-	mux.Handle("POST /v1/baseline/start", candidate(http.HandlerFunc(h.start)))
+// registerBaselineRoute wires GET /v1/baseline/scenario for candidates.
+func registerBaselineRoute(mux *http.ServeMux, authn Authenticator, catalog CatalogReader, scenarioID string) {
+	h := &baselineHandlers{catalog: catalog, scenarioID: scenarioID}
+	mux.Handle("GET /v1/baseline/scenario", requireRole(authn, "candidate")(http.HandlerFunc(h.get)))
 }
 
 // pick copies only the candidate-safe fields, and refuses anything that is not a
