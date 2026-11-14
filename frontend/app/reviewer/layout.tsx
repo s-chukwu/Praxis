@@ -17,7 +17,8 @@ const NAV = [
 // Focus mode: no learner sidebar, one slim bar, and the review screen hides even the nav.
 export default function ReviewerLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { signOut } = useLearner();
+  const { role, signOut } = useLearner();
+  const nav = role === 'admin' || PREVIEW ? [...NAV, { label: 'Users', href: '/reviewer/admin' }] : NAV;
   const reviewing = path.startsWith('/reviewer/review/');
 
   return (
@@ -30,7 +31,7 @@ export default function ReviewerLayout({ children }: { children: React.ReactNode
           </Link>
           {!reviewing && (
             <nav aria-label="Reviewer" className="hidden flex-1 gap-1 md:flex">
-              {NAV.map((n) => {
+              {nav.map((n) => {
                 const active = n.href === '/reviewer' ? path === n.href : path.startsWith(n.href);
                 return (
                   <Link
@@ -54,7 +55,7 @@ export default function ReviewerLayout({ children }: { children: React.ReactNode
         </div>
         {!reviewing && (
           <nav aria-label="Reviewer mobile" className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden">
-            {NAV.map((n) => (
+            {nav.map((n) => (
               <Link key={n.href} href={n.href} className="shrink-0 rounded-control px-3 py-1.5 text-sm font-medium text-muted">
                 {n.label}
               </Link>
