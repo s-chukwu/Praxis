@@ -49,6 +49,10 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: true
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
           tags: |
             ghcr.io/${{ steps.repo.outputs.name }}/${{ matrix.name }}:${{ github.sha }}
             ghcr.io/${{ steps.repo.outputs.name }}/${{ matrix.name }}:latest
