@@ -30,6 +30,7 @@ type Attempt struct {
 	CandidateID         string
 	TargetTrack         string
 	RoleStandardVersion string
+
 	ScenarioVersion     string
 	RubricVersion       string
 	PolicyVersion       string
@@ -62,6 +63,7 @@ type rowScanner interface {
 }
 
 func scanAttempt(row rowScanner) (Attempt, error) {
+
 	var a Attempt
 	var status string
 	err := row.Scan(&a.ID, &a.CandidateID, &a.TargetTrack, &a.RoleStandardVersion,
@@ -94,6 +96,7 @@ func (s *Store) CreateAttempt(ctx context.Context, n NewAttempt, actor Actor) (A
 	err := s.WithTx(ctx, func(tx pgx.Tx) error {
 		a, err := createAttempt(ctx, tx, n, actor)
 		out = a
+
 		return err
 	})
 	return out, err
@@ -126,6 +129,73 @@ func createAttempt(ctx context.Context, q querier, n NewAttempt, actor Actor) (A
 		Details:    map[string]any{"scenario_id": n.ScenarioID, "stage": stage},
 	})
 	return a, err
+
+}
+
+// CreateOrGetBaselineAttempt gives a candidate their one baseline attempt.
+// If they already have one, it is returned untouched (answers and progress kept)
+// and created is false. If not, a new one is made and created is true.
+// The database index attempts_one_baseline_per_candidate guarantees that two
+// requests at the same moment can never create two attempts.
+func (s *Store) CreateOrGetBaselineAttempt(ctx context.Context, n NewAttempt, actor Actor) (Attempt, bool, error) {
+	var out Attempt
+	var created bool
+	err := s.WithTx(ctx, func(tx pgx.Tx) error {
+		a, c, err := createOrGetBaselineAttempt(ctx, tx, n, actor)
+		out, created = a, c
+		return err
+	})
+	return out, created, err
+}
+
+func createOrGetBaselineAttempt(ctx context.Context, q querier, n NewAttempt, actor Actor) (Attempt, bool, error) {
+	n.Stage = "baseline"
+
+	// Try to insert. If this candidate already has a baseline attempt, the insert
+	// does nothing and returns no row.
+	row := q.QueryRow(ctx,
+		`insert into attempts (candidate_id, target_track, role_standard_version, scenario_version,
+		                       rubric_version, policy_version, scenario_id, stage)
+		 values ($1, $2, $3, $4, $5, $6, $7, 'baseline')
+		 on conflict (candidate_id) where stage = 'baseline' do nothing
+		 returning `+attemptColumns,
+		n.CandidateID, n.TargetTrack, n.RoleStandardVersion, n.ScenarioVersion,
+		n.RubricVersion, n.PolicyVersion, nullable(n.ScenarioID))
+
+
+	a, err := scanAttempt(row)
+	if err == nil {
+		// A new attempt was created, so record it.
+		err = insertAudit(ctx, q, auditEvent{
+			Actor:      actor,
+			Action:     "attempt.created",
+			EntityType: "attempt",
+			EntityID:   a.ID,
+			Details:    map[string]any{"scenario_id": n.ScenarioID, "stage": "baseline"},
+		})
+		if err != nil {
+			return Attempt{}, false, err
+		}
+		return a, true, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Attempt{}, false, err
+	}
+
+	// Nothing was inserted, so one already exists. Return it as it is.
+	row = q.QueryRow(ctx,
+		`select `+attemptColumns+` from attempts
+		 where candidate_id = $1 and stage = 'baseline'`,
+		n.CandidateID)
+	existing, err := scanAttempt(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Attempt{}, false, ErrNotFound
+	}
+	if err != nil {
+		return Attempt{}, false, err
+	}
+	return existing, false, nil
+
 }
 
 // GetAttempt returns one attempt. The caller must check that the person
@@ -158,6 +228,7 @@ func (s *Store) ListReviewQueue(ctx context.Context) ([]Attempt, error) {
 		 order by submitted_at nulls last, created_at`)
 	if err != nil {
 		return nil, err
+
 	}
 	return collectAttempts(rows)
 }
@@ -190,6 +261,7 @@ func (s *Store) TransitionAttempt(ctx context.Context, attemptID string, to work
 	var out Attempt
 	err := s.WithTx(ctx, func(tx pgx.Tx) error {
 		a, err := transitionAttempt(ctx, tx, attemptID, to, actor)
+
 		out = a
 		return err
 	})
@@ -221,6 +293,7 @@ func transitionAttempt(ctx context.Context, q querier, attemptID string, to work
 	if err != nil {
 		return Attempt{}, err
 	}
+
 
 	err = insertAudit(ctx, q, auditEvent{
 		Actor:      actor,
