@@ -27,11 +27,18 @@ type baselineScenario struct {
 	Brief          string   `json:"brief"`
 	TimeboxMinutes int      `json:"timebox_minutes"`
 	Fields         []string `json:"fields"`
+
+	// Versions pinned on the attempt when it is created; never sent to the browser.
+	RubricVersion       string `json:"-"`
+	RoleStandardVersion string `json:"-"`
+	PolicyVersion       string `json:"-"`
 }
 
 type catalogBody struct {
 	Current struct {
-		Scenarios string `json:"scenarios"`
+		Scenarios        string `json:"scenarios"`
+		RoleStandard     string `json:"role_standard"`
+		AllocationPolicy string `json:"allocation_policy"`
 	} `json:"current"`
 	ScenarioBanks []struct {
 		Version   string `json:"version"`
@@ -41,6 +48,7 @@ type catalogBody struct {
 			TimeboxMinutes    int      `json:"timebox_minutes"`
 			ExpectedArtifacts []string `json:"expected_artifacts"`
 			CandidateBrief    string   `json:"candidate_brief"`
+			RubricVersion     string   `json:"rubric_version"`
 		} `json:"scenarios"`
 	} `json:"scenario_banks"`
 }
@@ -49,17 +57,23 @@ var errScenarioMissing = errors.New("baseline scenario not found in the current 
 
 type baselineHandlers struct {
 	catalog    CatalogReader
+	attempts   AttemptStore
 	scenarioID string
+
+	// startMu stops a double click from creating two baseline attempts on this instance.
+	startMu sync.Mutex
 
 	mu       sync.Mutex
 	cached   *baselineScenario
 	cachedAt time.Time
 }
 
-// registerBaselineRoute wires GET /v1/baseline/scenario for candidates.
-func registerBaselineRoute(mux *http.ServeMux, authn Authenticator, catalog CatalogReader, scenarioID string) {
-	h := &baselineHandlers{catalog: catalog, scenarioID: scenarioID}
-	mux.Handle("GET /v1/baseline/scenario", requireRole(authn, "candidate")(http.HandlerFunc(h.get)))
+// registerBaselineRoutes wires the candidate's baseline scenario and start routes.
+func registerBaselineRoutes(mux *http.ServeMux, authn Authenticator, catalog CatalogReader, attempts AttemptStore, scenarioID string) {
+	h := &baselineHandlers{catalog: catalog, attempts: attempts, scenarioID: scenarioID}
+	candidate := requireRole(authn, "candidate")
+	mux.Handle("GET /v1/baseline/scenario", candidate(http.HandlerFunc(h.get)))
+	mux.Handle("POST /v1/baseline/start", candidate(http.HandlerFunc(h.start)))
 }
 
 // pick copies only the candidate-safe fields, and refuses anything that is not a
@@ -81,6 +95,10 @@ func pick(raw json.RawMessage, scenarioID string) (baselineScenario, error) {
 					Brief:          s.CandidateBrief,
 					TimeboxMinutes: s.TimeboxMinutes,
 					Fields:         s.ExpectedArtifacts,
+
+					RubricVersion:       s.RubricVersion,
+					RoleStandardVersion: body.Current.RoleStandard,
+					PolicyVersion:       body.Current.AllocationPolicy,
 				}, nil
 			}
 		}

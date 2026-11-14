@@ -63,7 +63,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerReviewRoutes(mux, authn, reviews)
 	registerFinalizeRoute(mux, authn, reviews, finalizer, scorer)
 	registerPlanRoutes(mux, authn, reviews, plans, planner)
-	registerBaselineRoute(mux, authn, catalog, cfg.BaselineScenarioID)
+	registerBaselineRoutes(mux, authn, catalog, attempts, cfg.BaselineScenarioID)
 	registerAssessorRoute(mux, authn, reviews, packets)
 	registerQueueRoute(mux, authn, attempts, reviews)
 	registerAdminRoutes(mux, authn, roles)
