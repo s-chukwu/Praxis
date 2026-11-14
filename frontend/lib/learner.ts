@@ -29,6 +29,21 @@ async function userId() {
   return data.session?.user;
 }
 
+export type Role = 'candidate' | 'reviewer' | 'admin' | 'employer';
+
+// The role lives in the profiles table, so only the backend can say who is a reviewer.
+export async function getRole(): Promise<Role | null> {
+  if (PREVIEW) return 'candidate';
+  const user = await userId();
+  if (!user) return null;
+  try {
+    return (await request<{ role: Role }>('GET', '/v1/me')).role;
+  } catch (e) {
+    report(e);
+    return 'candidate';
+  }
+}
+
 export function clearPreview() {
   if (PREVIEW) localStorage.removeItem(key(PREVIEW_USER.id));
 }

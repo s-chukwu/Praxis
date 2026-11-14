@@ -2,11 +2,12 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import { PREVIEW, clearPreview, getLearner, type Learner } from '@/lib/learner';
+import { PREVIEW, clearPreview, getLearner, getRole, type Learner, type Role } from '@/lib/learner';
 import { friendly } from '@/lib/errors';
 
 type State = {
   learner: Learner | null;
+  role: Role | null;
   ready: boolean;
   loadError: string;
   refresh: () => Promise<void>;
@@ -17,12 +18,15 @@ const LearnerContext = createContext<State | null>(null);
 
 export function LearnerProvider({ children }: { children: ReactNode }) {
   const [learner, setLearner] = useState<Learner | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState('');
 
   const refresh = useCallback(async () => {
     try {
-      setLearner(await getLearner());
+      const [l, r] = await Promise.all([getLearner(), getRole()]);
+      setLearner(l);
+      setRole(r);
       setLoadError('');
     } catch (e) {
       setLoadError(friendly(e, 'We could not load your training. Try again in a minute.'));
@@ -44,9 +48,10 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }
     await supabase?.auth.signOut();
     setLearner(null);
+    setRole(null);
   }, [refresh]);
 
-  return <LearnerContext.Provider value={{ learner, ready, loadError, refresh, signOut }}>{children}</LearnerContext.Provider>;
+  return <LearnerContext.Provider value={{ learner, role, ready, loadError, refresh, signOut }}>{children}</LearnerContext.Provider>;
 }
 
 export function useLearner() {
