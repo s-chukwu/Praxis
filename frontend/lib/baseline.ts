@@ -83,3 +83,19 @@ export async function submitBaseline(id: string, answers: Answers): Promise<Atte
   if (PREVIEW) return savePreview({ ...(previewAttempt() as Attempt), status: 'submitted', submitted_at: new Date().toISOString() });
   return request<Attempt>('POST', `/v1/attempts/${id}/submit`);
 }
+
+export type PlanReason = { code: string; competency?: string | null };
+export type PlanModule = { position: number; course_code: string; title: string; reasons: PlanReason[]; completed_at: string | null };
+export type Progress = {
+  baseline: { attempt_id: string; status: AttemptStatus; submitted_at: string | null } | null;
+  result: { review_id: string; weighted_score: number | null; proposed_outcome: string | null; scores: { dimension: string; score: number }[] } | null;
+  plan: { id: string; modules: PlanModule[] } | null;
+};
+
+export async function getProgress(): Promise<Progress> {
+  if (PREVIEW) {
+    const a = previewAttempt();
+    return { baseline: a && { attempt_id: a.id, status: a.status, submitted_at: a.submitted_at }, result: null, plan: null };
+  }
+  return request<Progress>('GET', '/v1/me/progress');
+}
