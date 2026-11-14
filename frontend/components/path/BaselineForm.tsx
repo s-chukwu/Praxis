@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { CheckCircle2, Clock } from 'lucide-react';
+import { CheckCircle2, Clock, Hourglass } from 'lucide-react';
 import Textarea from '@/components/ui/Textarea';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { useLearner } from '@/components/LearnerProvider';
 import { friendly, report } from '@/lib/errors';
+import { ago, hoursLeft, REVIEW_HOURS } from '@/lib/journey';
 import { getBaseline, getScenario, saveAnswers, startBaseline, submitBaseline, type Answers, type Attempt, type Scenario } from '@/lib/baseline';
 
 type Field = { label: string; hint?: string; rows: number; required?: boolean };
@@ -22,6 +23,8 @@ const FIELDS: Record<string, Field> = {
   ai_interaction: { label: 'How you used AI (optional)', hint: 'Paste the AI draft and what you changed.', rows: 3 },
 };
 
+const words = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
+
 const fieldFor = (id: string): Field => FIELDS[id] ?? { label: id.replace(/_/g, ' '), rows: 4, required: true };
 
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
@@ -36,6 +39,7 @@ export default function BaselineForm() {
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
   const [save, setSave] = useState<Save>('idle');
+  const [resumedAt, setResumedAt] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -44,12 +48,14 @@ export default function BaselineForm() {
         setScenario(s);
         setAttempt(a);
         setAnswers(a?.answers ?? {});
+        if (a?.updated_at && Object.values(a.answers ?? {}).some((v) => v.trim())) setResumedAt(a.updated_at);
       })
       .catch((e) => setLoadError(friendly(e)));
     return () => clearTimeout(timer.current);
   }, []);
 
   const open = attempt?.status === 'in_progress' || attempt?.status === 'assigned';
+  const required = scenario ? scenario.fields.filter((id) => fieldFor(id).required) : [];
 
   const start = async () => {
     if (!learner?.program) return setFormError('Choose your program first, then start the task.');
@@ -120,14 +126,32 @@ export default function BaselineForm() {
   }
 
   if (attempt && !open) {
+    const left = hoursLeft(attempt.submitted_at);
     return (
-      <div role="status" className="animate-rise rounded-panel bg-surface p-8 shadow-panel">
-        <CheckCircle2 className="h-10 w-10 animate-pop text-brand" aria-hidden />
-        <h2 className="mt-4 text-xl font-bold">Your answers are in</h2>
-        <p className="mt-2 max-w-prose text-muted">
-          A trained reviewer will score your work against the rubric. Your learning plan appears once the review is done.
-        </p>
-        <ButtonLink href="/dashboard" size="lg" className="mt-6">
+      <div role="status" className="animate-rise mx-auto max-w-2xl rounded-panel bg-surface p-8 shadow-panel">
+        <CheckCircle2 className="h-11 w-11 animate-pop text-brand" aria-hidden />
+        <h2 className="mt-4 text-2xl font-bold">Case closed on your side</h2>
+        <p className="mt-2 max-w-prose text-muted">Your answers are locked and with a trained support supervisor. This is the first entry in your training record.</p>
+        <div className="mt-6 rounded-control bg-page p-4">
+          <p className="flex items-center gap-2 font-semibold">
+            <Hourglass className="h-4 w-4 text-progress" aria-hidden />
+            {left === null ? 'Reviewed within 48 hours' : left > 0 ? `Review due within ${left} ${left === 1 ? 'hour' : 'hours'}` : 'Taking a little longer than usual'}
+          </p>
+          {left !== null && (
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
+              <div className="h-full rounded-full bg-progress" style={{ width: `${((REVIEW_HOURS - left) / REVIEW_HOURS) * 100}%` }} />
+            </div>
+          )}
+        </div>
+        <ol className="mt-6 space-y-3 text-sm">
+          {['A reviewer scores your four rubric areas and each skill.', 'Your result shows your strongest area and where to start.', 'Your learning plan lists only the courses you need.'].map((t, i) => (
+            <li key={t} className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand-ink">{i + 1}</span>
+              <span className="pt-0.5">{t}</span>
+            </li>
+          ))}
+        </ol>
+        <ButtonLink href="/dashboard" size="lg" className="mt-7">
           Back to dashboard
         </ButtonLink>
       </div>
@@ -159,6 +183,26 @@ export default function BaselineForm() {
           </div>
         ) : (
           <>
+            {resumedAt && (
+              <p role="status" className="animate-rise rounded-control bg-brand-soft px-4 py-3 text-sm text-brand-ink">
+                Welcome back. Everything you wrote was saved {ago(resumedAt)}.
+              </p>
+            )}
+            <div className="sticky top-16 z-10 -mx-1 rounded-control bg-page/95 px-1 py-2 backdrop-blur md:top-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-semibold">
+                  <span className="tabular-nums">{required.filter((id) => answers[id]?.trim()).length}</span> of {required.length} answers written
+                </span>
+                <span className="text-muted" aria-live="polite">
+                  {save === 'saving' ? 'Saving…' : save === 'saved' ? 'Saved' : save === 'failed' ? 'Not saved yet' : ''}
+                </span>
+              </div>
+              <div className="mt-2 flex gap-1.5" aria-hidden>
+                {required.map((id) => (
+                  <span key={id} className={`h-1.5 flex-1 rounded-full transition-colors duration-500 ${answers[id]?.trim() ? 'bg-brand' : 'bg-line'}`} />
+                ))}
+              </div>
+            </div>
             {scenario.fields.map((id) => {
               const f = fieldFor(id);
               return (
@@ -166,7 +210,7 @@ export default function BaselineForm() {
                   key={id}
                   id={id}
                   label={f.label}
-                  hint={f.hint}
+                  hint={answers[id]?.trim() ? `${f.hint ?? ''} ${words(answers[id])} words.`.trim() : f.hint}
                   error={errors[id]}
                   rows={f.rows}
                   value={answers[id] ?? ''}
@@ -178,8 +222,8 @@ export default function BaselineForm() {
               <Button type="submit" size="lg" loading={busy}>
                 Submit my answers
               </Button>
-              <span className="text-sm text-muted" aria-live="polite">
-                {save === 'saving' ? 'Saving…' : save === 'saved' ? 'Saved' : save === 'failed' ? 'Not saved yet. Check your connection.' : ''}
+              <span className="text-sm text-muted">
+                {save === 'failed' ? 'Not saved yet. Check your connection.' : ''}
               </span>
             </div>
             <p className="text-sm text-muted">After you submit, your answers go to a reviewer and can no longer be changed.</p>

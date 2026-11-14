@@ -18,6 +18,7 @@ export type Attempt = {
   status: AttemptStatus;
   answers?: Record<string, string>;
   submitted_at: string | null;
+  updated_at?: string;
 };
 
 export type Answers = Record<string, string>;
