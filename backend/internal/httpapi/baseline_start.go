@@ -14,7 +14,7 @@ type startBaselineRequest struct {
 }
 
 // start gives the candidate their baseline attempt, opened and ready for answers.
-// Calling it again returns the same attempt, so reloads and double clicks are safe.
+// Calling it again returns the same attempt.
 func (h *baselineHandlers) start(w http.ResponseWriter, r *http.Request) {
 	if h.attempts == nil {
 		writeError(w, http.StatusServiceUnavailable, "database_not_configured",
@@ -39,45 +39,35 @@ func (h *baselineHandlers) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.startMu.Lock()
-	defer h.startMu.Unlock()
-
-	existing, err := h.attempts.ListCandidateAttempts(r.Context(), caller.UserID)
+	s, err := h.load(r.Context(), aiclient.CandidateActor(caller.UserID))
+	if err != nil {
+		log.Printf("baseline start could not load scenario %q: %v", h.scenarioID, err)
+		writeError(w, http.StatusBadGateway, "scenario_unavailable", "the baseline task could not be loaded right now")
+		return
+	}
+	// The database allows one baseline per candidate, so this is safe across servers and double clicks.
+	got, created, err := h.attempts.CreateOrGetBaselineAttempt(r.Context(), store.NewAttempt{
+		CandidateID:         caller.UserID,
+		TargetTrack:         body.Program,
+		RoleStandardVersion: s.RoleStandardVersion,
+		ScenarioVersion:     s.Version,
+		RubricVersion:       s.RubricVersion,
+		PolicyVersion:       s.PolicyVersion,
+		ScenarioID:          s.ScenarioID,
+		Stage:               "baseline",
+	}, actorOf(caller))
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	var attempt *store.Attempt
-	for i := range existing {
-		if existing[i].Stage == "baseline" && existing[i].Status != workflow.Voided {
-			attempt = &existing[i]
-			break
-		}
+	if got.Status == workflow.Voided {
+		writeError(w, http.StatusConflict, "baseline_voided", "your baseline task was closed by an admin, so contact your facilitator")
+		return
 	}
-
+	attempt := &got
 	status := http.StatusOK
-	if attempt == nil {
-		s, err := h.load(r.Context(), aiclient.CandidateActor(caller.UserID))
-		if err != nil {
-			log.Printf("baseline start could not load scenario %q: %v", h.scenarioID, err)
-			writeError(w, http.StatusBadGateway, "scenario_unavailable", "the baseline task could not be loaded right now")
-			return
-		}
-		created, err := h.attempts.CreateAttempt(r.Context(), store.NewAttempt{
-			CandidateID:         caller.UserID,
-			TargetTrack:         body.Program,
-			RoleStandardVersion: s.RoleStandardVersion,
-			ScenarioVersion:     s.Version,
-			RubricVersion:       s.RubricVersion,
-			PolicyVersion:       s.PolicyVersion,
-			ScenarioID:          s.ScenarioID,
-			Stage:               "baseline",
-		}, actorOf(caller))
-		if err != nil {
-			writeStoreError(w, err)
-			return
-		}
-		attempt, status = &created, http.StatusCreated
+	if created {
+		status = http.StatusCreated
 	}
 
 	if attempt.Status == workflow.Assigned {

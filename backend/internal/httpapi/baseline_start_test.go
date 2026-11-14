@@ -1,13 +1,26 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/s-chukwu/Praxis/backend/internal/store"
 	"github.com/s-chukwu/Praxis/backend/internal/workflow"
 )
+
+// CreateOrGetBaselineAttempt mirrors the store: one baseline per candidate, voided or not.
+func (f *fakeAttempts) CreateOrGetBaselineAttempt(ctx context.Context, n store.NewAttempt, actor store.Actor) (store.Attempt, bool, error) {
+	for _, a := range f.items {
+		if a.CandidateID == n.CandidateID && a.Stage == "baseline" {
+			return a, false, nil
+		}
+	}
+	a, err := f.CreateAttempt(ctx, n, actor)
+	return a, err == nil, err
+}
 
 var startCatalogJSON = strings.Replace(catalogJSON, `"current":{"scenarios":"1.2.0"}`,
 	`"current":{"scenarios":"1.2.0","role_standard":"1.0.0","allocation_policy":"1.0.0"}`, 1)
@@ -45,14 +58,14 @@ func TestStartBaselineAgainReturnsTheSameAttempt(t *testing.T) {
 		t.Fatalf("expected one attempt per candidate, got %d", len(attempts.items))
 	}
 
-	// A voided baseline does not block a fresh one.
+	// A voided baseline is reported clearly instead of being reopened.
 	for id, a := range attempts.items {
 		if a.CandidateID == candidateA {
 			a.Status = workflow.Voided
 			attempts.items[id] = a
 		}
 	}
-	expectStatus(t, call(t, h, http.MethodPost, "/v1/baseline/start", candidateA, "candidate", `{"program":"operator"}`), http.StatusCreated, "after void")
+	expectStatus(t, call(t, h, http.MethodPost, "/v1/baseline/start", candidateA, "candidate", `{"program":"operator"}`), http.StatusConflict, "after void")
 }
 
 func TestStartBaselineRefusesBadInputAndOtherRoles(t *testing.T) {

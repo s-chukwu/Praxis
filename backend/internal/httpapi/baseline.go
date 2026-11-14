@@ -60,9 +60,6 @@ type baselineHandlers struct {
 	attempts   AttemptStore
 	scenarioID string
 
-	// startMu stops a double click from creating two baseline attempts on this instance.
-	startMu sync.Mutex
-
 	mu       sync.Mutex
 	cached   *baselineScenario
 	cachedAt time.Time
