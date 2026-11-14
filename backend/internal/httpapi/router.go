@@ -38,9 +38,11 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	// that need it answer 503 instead of failing at startup.
 	var scorer Scorer
 	var planner Planner
+	var catalog CatalogReader
 	if client, err := aiclient.New(cfg.AIServiceURL, cfg.AIServiceSharedSecret); err == nil {
 		scorer = client
 		planner = client
+		catalog = client
 	}
 
 	mux := http.NewServeMux()
@@ -57,6 +59,7 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerReviewRoutes(mux, authn, reviews)
 	registerFinalizeRoute(mux, authn, reviews, finalizer, scorer)
 	registerPlanRoutes(mux, authn, reviews, plans, planner)
+	registerBaselineRoute(mux, authn, catalog, cfg.BaselineScenarioID)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
