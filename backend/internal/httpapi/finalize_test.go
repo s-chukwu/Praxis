@@ -106,7 +106,7 @@ func reviewWithScores(t *testing.T, h http.Handler, answers string) (string, str
 	return attemptID, reviewID
 }
 
-const finalizeJSON = `{"reviewed_competencies":{"C1":3,"C2":4},"notes":"Reviewed against the rubric."}`
+const finalizeJSON = `{"reviewed_competencies":{"C1":3,"C2":4,"C3":3,"C4":2,"C5":3,"C6":3},"notes":"Reviewed against the rubric."}`
 
 func TestFinalizeBuildsTheScoreRequestAndStoresTheResult(t *testing.T) {
 	scorer := &fakeScorer{response: scoreResponseJSON("evidence_verified")}
@@ -182,6 +182,52 @@ func TestFinalizeRefusesBadCompetencies(t *testing.T) {
 
 	if scorer.calls != 0 {
 		t.Fatalf("bad input must not reach the AI service, got %d calls", scorer.calls)
+	}
+}
+
+func TestFinalizeNeedsEveryCompetencyOfTheTrack(t *testing.T) {
+	scorer := &fakeScorer{response: scoreResponseJSON("evidence_verified")}
+	h, _ := newFinalizeTestRouter(scorer)
+	_, reviewID := reviewWithScores(t, h, goodAnswers)
+	path := "/v1/reviews/" + reviewID + "/finalize"
+
+	missingOne := `{"reviewed_competencies":{"C1":3,"C2":4,"C3":3,"C4":2,"C5":3}}`
+	rec := call(t, h, http.MethodPost, path, reviewerID, "reviewer", missingOne)
+	expectStatus(t, rec, http.StatusUnprocessableEntity, "operator review without C6")
+	if !strings.Contains(rec.Body.String(), "C6") {
+		t.Fatalf("the answer should name the missing competency, got %s", rec.Body.String())
+	}
+
+	wrongTrack := `{"reviewed_competencies":{"C1":3,"C2":4,"C3":3,"C4":2,"C5":3,"C6":3,"B1":2}}`
+	rec = call(t, h, http.MethodPost, path, reviewerID, "reviewer", wrongTrack)
+	expectStatus(t, rec, http.StatusUnprocessableEntity, "operator review with a builder competency")
+	if !strings.Contains(rec.Body.String(), "B1") {
+		t.Fatalf("the answer should name the extra competency, got %s", rec.Body.String())
+	}
+
+	if scorer.calls != 0 {
+		t.Fatalf("an incomplete review must not reach the AI service, got %d calls", scorer.calls)
+	}
+}
+
+func TestCheckCompetencies(t *testing.T) {
+	operator := map[string]int{"C1": 3, "C2": 3, "C3": 3, "C4": 3, "C5": 3, "C6": 3}
+	builder := map[string]int{"C1": 3, "C2": 3, "C3": 3, "C4": 3, "C5": 3, "C6": 3, "B1": 2, "B2": 2, "B3": 2}
+
+	if msg := checkCompetencies("operator", operator); msg != "" {
+		t.Errorf("a full operator set should pass, got %q", msg)
+	}
+	if msg := checkCompetencies("builder", builder); msg != "" {
+		t.Errorf("a full builder set should pass, got %q", msg)
+	}
+	if msg := checkCompetencies("builder", operator); !strings.Contains(msg, "B1") {
+		t.Errorf("a builder review without B1 to B3 must be refused, got %q", msg)
+	}
+	if msg := checkCompetencies("operator", builder); !strings.Contains(msg, "B1") {
+		t.Errorf("an operator review with B competencies must be refused, got %q", msg)
+	}
+	if msg := checkCompetencies("wizard", operator); msg == "" {
+		t.Error("an unknown track must be refused")
 	}
 }
 

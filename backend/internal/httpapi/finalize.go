@@ -25,6 +25,45 @@ const (
 
 var competencyCode = regexp.MustCompile(`^[CB][1-9]$`)
 
+// Every track has a fixed set of competencies, as in the allocation policy.
+// A review has to score all of them, so no plan can ever come back incomplete.
+var trackCompetencies = map[string][]string{
+	"operator": {"C1", "C2", "C3", "C4", "C5", "C6"},
+	"builder":  {"C1", "C2", "C3", "C4", "C5", "C6", "B1", "B2", "B3"},
+}
+
+// checkCompetencies returns a message when the reviewer's scores do not match the track.
+func checkCompetencies(track string, scores map[string]int) string {
+	required, ok := trackCompetencies[track]
+	if !ok {
+		return "the attempt has an unknown track: " + track
+	}
+
+	allowed := make(map[string]bool, len(required))
+	var missing []string
+	for _, code := range required {
+		allowed[code] = true
+		if _, scored := scores[code]; !scored {
+			missing = append(missing, code)
+		}
+	}
+	var extra []string
+	for code := range scores {
+		if !allowed[code] {
+			extra = append(extra, code)
+		}
+	}
+	sort.Strings(extra)
+
+	switch {
+	case len(missing) > 0:
+		return "missing competency scores for " + strings.Join(missing, ", ")
+	case len(extra) > 0:
+		return "these competencies do not belong to the " + track + " track: " + strings.Join(extra, ", ")
+	}
+	return ""
+}
+
 // Scorer is the part of the AI client the finalize route needs.
 type Scorer interface {
 	ScoreDiagnostic(ctx context.Context, actor aiclient.Actor, requestID string, req any) (json.RawMessage, error)
@@ -239,6 +278,11 @@ func (h *finalizeHandlers) finalize(w http.ResponseWriter, r *http.Request) {
 	}
 	if attempt.ScenarioID == nil || strings.TrimSpace(*attempt.ScenarioID) == "" {
 		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "the attempt has no scenario id")
+		return
+	}
+
+	if msg := checkCompetencies(attempt.TargetTrack, body.ReviewedCompetencies); msg != "" {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", msg)
 		return
 	}
 
