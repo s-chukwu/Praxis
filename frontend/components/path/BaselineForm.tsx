@@ -1,130 +1,195 @@
 'use client';
-import { useState, type FormEvent } from 'react';
-import { Clock } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { CheckCircle2, Clock } from 'lucide-react';
 import Textarea from '@/components/ui/Textarea';
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
+import { useLearner } from '@/components/LearnerProvider';
+import { friendly, report } from '@/lib/errors';
+import { getBaseline, getScenario, saveAnswers, startBaseline, submitBaseline, type Answers, type Attempt, type Scenario } from '@/lib/baseline';
 
-export type Scenario = { id: string; brief: string; timeboxMinutes: number };
+type Field = { label: string; hint?: string; rows: number; required?: boolean };
 
-type Field = {
-  id: string;
-  label: string;
-  hint?: string;
-  rows: number;
-  required?: boolean;
-};
-
-const fields: Field[] = [
-  {
-    id: 'customer_reply',
-    label: 'Your reply to the customer',
-    hint: 'Write the reply you would send. Use plain language.',
-    rows: 6,
-    required: true,
-  },
-  {
-    id: 'internal_note',
-    label: 'Internal note for your team',
-    hint: 'Add anything your team needs to know about this case.',
-    rows: 3,
-    required: true,
-  },
-  {
-    id: 'verification_steps',
+// Keys must match the scenario's fields exactly, or scoring rejects the answer.
+const FIELDS: Record<string, Field> = {
+  customer_reply: { label: 'Your reply to the customer', hint: 'Write the reply you would send. Use plain language.', rows: 6, required: true },
+  internal_note: { label: 'Internal note for your team', hint: 'Add anything your team needs to know about this case.', rows: 3, required: true },
+  verification_steps: {
     label: 'How you would check your answer',
     hint: 'Three to five steps, one per line. Explain how you would confirm the reply is correct.',
     rows: 4,
     required: true,
   },
-  {
-    id: 'ai_record',
-    label: 'How you used AI (optional)',
-    hint: 'Paste the AI draft and what you changed.',
-    rows: 3,
-  },
-];
+  ai_interaction: { label: 'How you used AI (optional)', hint: 'Paste the AI draft and what you changed.', rows: 3 },
+};
 
-export default function BaselineForm({ scenario }: { scenario?: Scenario }) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+const fieldFor = (id: string): Field => FIELDS[id] ?? { label: id.replace(/_/g, ' '), rows: 4, required: true };
+
+type Save = 'idle' | 'saving' | 'saved' | 'failed';
+
+export default function BaselineForm() {
+  const { learner } = useLearner();
+  const [scenario, setScenario] = useState<Scenario | null>(null);
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  const [answers, setAnswers] = useState<Answers>({});
+  const [loadError, setLoadError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
-  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [save, setSave] = useState<Save>('idle');
+  const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const found: Record<string, string> = {};
-    for (const field of fields) {
-      if (field.required && !answers[field.id]?.trim()) {
-        found[field.id] = 'This answer is required.';
-      }
-    }
+  useEffect(() => {
+    Promise.all([getScenario(), getBaseline()])
+      .then(([s, a]) => {
+        setScenario(s);
+        setAttempt(a);
+        setAnswers(a?.answers ?? {});
+      })
+      .catch((e) => setLoadError(friendly(e)));
+    return () => clearTimeout(timer.current);
+  }, []);
 
-    setErrors(found);
-    if (Object.keys(found).length) {
-      setFormError('Answer the required questions before submitting.');
-      setMessage('');
-      const first = fields.find((field) => found[field.id]);
-      if (first) document.getElementById(first.id)?.focus();
-      return;
-    }
+  const open = attempt?.status === 'in_progress' || attempt?.status === 'assigned';
 
+  const start = async () => {
+    if (!learner?.program) return setFormError('Choose your program first, then start the task.');
+    setBusy(true);
     setFormError('');
-    setMessage('Submitting opens once the assessment service is connected. Your answers stay on this page until then.');
+    try {
+      const a = await startBaseline(learner.program);
+      setAttempt(a);
+      setAnswers(a.answers ?? {});
+    } catch (e) {
+      setFormError(friendly(e));
+    }
+    setBusy(false);
   };
 
+  // Saves 1.5 seconds after the last keystroke, so typing never waits on the network.
+  const change = (id: string, value: string) => {
+    const next = { ...answers, [id]: value };
+    setAnswers(next);
+    if (errors[id]) setErrors(({ [id]: _, ...rest }) => rest);
+    if (!attempt) return;
+    clearTimeout(timer.current);
+    setSave('saving');
+    timer.current = setTimeout(() => {
+      saveAnswers(attempt.id, next)
+        .then(() => setSave('saved'))
+        .catch((e) => {
+          report(e);
+          setSave('failed');
+        });
+    }, 1500);
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!attempt || !scenario) return;
+    const found: Record<string, string> = {};
+    for (const id of scenario.fields) {
+      if (fieldFor(id).required && !answers[id]?.trim()) found[id] = 'This answer is required.';
+    }
+    setErrors(found);
+    const first = scenario.fields.find((id) => found[id]);
+    if (first) {
+      setFormError('Answer the required questions before submitting.');
+      return document.getElementById(first)?.focus();
+    }
+
+    clearTimeout(timer.current);
+    setBusy(true);
+    setFormError('');
+    try {
+      setAttempt(await submitBaseline(attempt.id, answers));
+    } catch (err) {
+      setFormError(friendly(err));
+    }
+    setBusy(false);
+  };
+
+  if (loadError) {
+    return (
+      <p role="alert" className="rounded-panel bg-danger-soft p-6 font-medium text-danger">
+        {loadError}
+      </p>
+    );
+  }
+  if (!scenario) {
+    return <div className="h-64 animate-pulse rounded-panel bg-surface shadow-panel" aria-label="Loading your task" />;
+  }
+
+  if (attempt && !open) {
+    return (
+      <div role="status" className="animate-rise rounded-panel bg-surface p-8 shadow-panel">
+        <CheckCircle2 className="h-10 w-10 animate-pop text-brand" aria-hidden />
+        <h2 className="mt-4 text-xl font-bold">Your answers are in</h2>
+        <p className="mt-2 max-w-prose text-muted">
+          A trained reviewer will score your work against the rubric. Your learning plan appears once the review is done.
+        </p>
+        <ButtonLink href="/dashboard" size="lg" className="mt-6">
+          Back to dashboard
+        </ButtonLink>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-start">
+    <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-start" noValidate>
       <section aria-labelledby="case-title" className="rounded-panel bg-surface p-6 shadow-panel lg:sticky lg:top-8">
         <div className="flex items-center justify-between gap-3">
           <h2 id="case-title" className="font-bold">
             The customer case
           </h2>
-          {scenario && (
-            <span className="flex items-center gap-1.5 text-sm text-muted">
-              <Clock className="h-4 w-4" aria-hidden /> {scenario.timeboxMinutes} minutes
-            </span>
-          )}
+          <span className="flex items-center gap-1.5 text-sm text-muted">
+            <Clock className="h-4 w-4" aria-hidden /> About {scenario.timebox_minutes} minutes
+          </span>
         </div>
-        <p className="mt-3 leading-relaxed text-ink/90">
-          {scenario ? scenario.brief : 'Your case appears here when you start the task. Take your time to read it before you answer.'}
-        </p>
+        <p className="mt-3 leading-relaxed text-ink/90">{scenario.brief}</p>
       </section>
 
       <div className="space-y-6">
-        {fields.map((field) => (
-          <Textarea
-            key={field.id}
-            id={field.id}
-            label={field.label}
-            hint={field.hint}
-            error={errors[field.id]}
-            rows={field.rows}
-            value={answers[field.id] ?? ''}
-            onChange={(e) => {
-              setAnswers((current) => ({ ...current, [field.id]: e.target.value }));
-              if (errors[field.id]) {
-                setErrors((current) => {
-                  const next = { ...current };
-                  delete next[field.id];
-                  return next;
-                });
-              }
-            }}
-          />
-        ))}
+        {!attempt ? (
+          <div className="rounded-panel bg-surface p-6 shadow-panel">
+            <p className="font-semibold">Ready when you are</p>
+            <p className="mt-1 text-sm text-muted">There is no timer. Your answers save as you type, so you can leave and come back.</p>
+            <Button size="lg" className="mt-5" loading={busy} onClick={start}>
+              Start the task
+            </Button>
+          </div>
+        ) : (
+          <>
+            {scenario.fields.map((id) => {
+              const f = fieldFor(id);
+              return (
+                <Textarea
+                  key={id}
+                  id={id}
+                  label={f.label}
+                  hint={f.hint}
+                  error={errors[id]}
+                  rows={f.rows}
+                  value={answers[id] ?? ''}
+                  onChange={(e) => change(id, e.target.value)}
+                />
+              );
+            })}
+            <div className="flex flex-wrap items-center gap-4">
+              <Button type="submit" size="lg" loading={busy}>
+                Submit my answers
+              </Button>
+              <span className="text-sm text-muted" aria-live="polite">
+                {save === 'saving' ? 'Saving…' : save === 'saved' ? 'Saved' : save === 'failed' ? 'Not saved yet. Check your connection.' : ''}
+              </span>
+            </div>
+            <p className="text-sm text-muted">After you submit, your answers go to a reviewer and can no longer be changed.</p>
+          </>
+        )}
         {formError && (
           <p role="alert" className="rounded-control bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
             {formError}
           </p>
         )}
-        {message && (
-          <p role="status" className="rounded-control bg-progress-soft px-4 py-3 text-sm text-[#7A4E09]">
-            {message}
-          </p>
-        )}
-        <Button type="submit" size="lg">
-          Submit my answers
-        </Button>
       </div>
     </form>
   );
