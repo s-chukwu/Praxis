@@ -5,13 +5,11 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 export async function readCvFile(file: File): Promise<string> {
   if (file.size > MAX_BYTES) throw new FriendlyError('That file is over 5 MB. Upload a smaller copy of your CV.');
-  const name = file.name.toLowerCase();
-  let text: string;
-  if (name.endsWith('.pdf')) text = await readPdf(file);
-  else if (name.endsWith('.docx')) text = await readDocx(file);
-  else if (name.endsWith('.txt')) text = await file.text();
-  else if (name.endsWith('.doc')) throw new FriendlyError('Old Word files (.doc) are not supported. Save it as .docx or PDF and try again.');
-  else throw new FriendlyError('Upload a PDF, a Word file (.docx) or a text file.');
+  // PM decision X-06: PDF only, so every CV is read the same way.
+  if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+    throw new FriendlyError('Upload your CV as a PDF. In Word or Google Docs, use Save as PDF or Download as PDF.');
+  }
+  const text = await readPdf(file);
 
   const clean = text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   if (clean.length < 30) throw new FriendlyError('We could not find text in that file. If it is a scanned image, paste the text instead.');
@@ -29,10 +27,4 @@ async function readPdf(file: File) {
     pages.push(content.items.map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : ' ') : '')).join(''));
   }
   return pages.join('\n');
-}
-
-async function readDocx(file: File) {
-  const mammoth = await import('mammoth');
-  const { value } = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-  return value;
 }
