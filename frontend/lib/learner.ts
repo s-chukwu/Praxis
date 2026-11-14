@@ -80,7 +80,7 @@ export async function suggestSkills(cvText: string): Promise<SuggestResult> {
   return { status: 'ok', suggestions: demoSuggestions(cvText) };
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } };
   const res = await fetch(`${API}${path}`, {
     method,
