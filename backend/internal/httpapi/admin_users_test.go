@@ -13,9 +13,11 @@ type adminFakeLister struct{}
 
 func (adminFakeLister) ListUsers(ctx context.Context) ([]store.AdminUser, error) {
 	submitted := "submitted"
+	attemptID := "55555555-5555-5555-5555-555555555555"
 	return []store.AdminUser{
-		{ID: candidateA, FullName: "Ada", Role: "candidate", BaselineStatus: &submitted},
-		{ID: candidateB, FullName: "Bola", Role: "candidate", BaselineStatus: nil},
+		{ID: candidateA, Email: "ada@example.com", FullName: "Ada", Role: "candidate",
+			BaselineAttemptID: &attemptID, BaselineStatus: &submitted},
+		{ID: candidateB, Email: "bola@example.com", FullName: "", Role: "candidate"},
 	}, nil
 }
 
@@ -30,9 +32,16 @@ func TestAdminUserListIsAdminOnly(t *testing.T) {
 	rec := call(t, mux, http.MethodGet, "/v1/admin/users", adminID, "admin", "")
 	expectStatus(t, rec, http.StatusOK, "admin")
 	body := rec.Body.String()
-
-	if !strings.Contains(body, `"baseline_status":"submitted"`) || !strings.Contains(body, `"baseline_status":"none"`) {
-		t.Fatalf("expected submitted and none statuses, got %s", body)
+	for _, want := range []string{
+		`"email":"ada@example.com"`,
+		`"baseline_attempt_id":"55555555-5555-5555-5555-555555555555"`,
+		`"baseline_status":"submitted"`,
+		`"baseline_attempt_id":null`,
+		`"baseline_status":"none"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %s in %s", want, body)
+		}
 	}
 }
 
