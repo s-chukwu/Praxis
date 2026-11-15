@@ -48,7 +48,8 @@ function Frame({ children }: { children: React.ReactNode }) {
   if (loadError) return <ErrorScreen message={loadError} onRetry={() => void refresh()} />;
   if (!ready || !learner) return <div className="min-h-screen bg-page" aria-busy="true" />;
   // The reviewer workspace has its own focus layout, separate from the learner app.
-  if (isOnboarding || isReviewerArea) return <>{children}</>;
+  // Courses use the same focus mode as the reviewer workspace: no sidebar, one task on screen.
+  if (isOnboarding || isReviewerArea || path.startsWith('/learn')) return <>{children}</>;
 
   return (
     <div className="flex min-h-screen">
