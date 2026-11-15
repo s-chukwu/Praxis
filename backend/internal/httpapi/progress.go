@@ -38,9 +38,11 @@ type progressResult struct {
 // progressView is everything the candidate's dashboard needs in one call.
 // Each part is null until that step has happened.
 type progressView struct {
-	Baseline *progressAttempt `json:"baseline"`
-	Result   *progressResult  `json:"result"`
-	Plan     *planView        `json:"plan"`
+	Baseline    *progressAttempt `json:"baseline"`
+	Result      *progressResult  `json:"result"`
+	Plan        *planView        `json:"plan"`
+	Final       *progressAttempt `json:"final"`
+	FinalResult *progressResult  `json:"final_result"`
 }
 
 type progressHandlers struct {
@@ -90,28 +92,18 @@ func (h *progressHandlers) get(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, view)
 		return
 	}
-	review, err := h.reviews.GetFinalizedReview(ctx, baseline.ID)
-	if errors.Is(err, store.ErrNotFound) {
+	result, err := h.resultFor(ctx, baseline.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if result == nil {
 		writeJSON(w, http.StatusOK, view)
 		return
 	}
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	scores, err := h.reviews.ListDimensionScores(ctx, review.ID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	result := &progressResult{ReviewID: review.ID, WeightedScore: review.WeightedScore,
-		ProposedOutcome: review.ProposedOutcome, FinalizedAt: review.FinalizedAt, Scores: make([]progressScore, 0, len(scores))}
-	for _, s := range scores {
-		result.Scores = append(result.Scores, progressScore{Dimension: s.Dimension, Score: s.Score})
-	}
 	view.Result = result
 
-	plan, err := h.plans.GetPlanByReview(ctx, review.ID)
+	plan, err := h.plans.GetPlanByReview(ctx, result.ReviewID)
 	switch {
 	case err == nil:
 		p := toPlanView(plan)
@@ -120,5 +112,41 @@ func (h *progressHandlers) get(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+
+	for i := range attempts {
+		final := &attempts[i]
+		if final.Stage != "final" || final.Status == workflow.Voided {
+			continue
+		}
+		view.Final = &progressAttempt{AttemptID: final.ID, Status: string(final.Status), SubmittedAt: final.SubmittedAt}
+		if final.Status == workflow.Reviewed {
+			if view.FinalResult, err = h.resultFor(ctx, final.ID); err != nil {
+				writeStoreError(w, err)
+				return
+			}
+		}
+		break
+	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+// resultFor returns the finalized review of an attempt as a candidate-safe result, or nil if there is none.
+func (h *progressHandlers) resultFor(ctx context.Context, attemptID string) (*progressResult, error) {
+	review, err := h.reviews.GetFinalizedReview(ctx, attemptID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	scores, err := h.reviews.ListDimensionScores(ctx, review.ID)
+	if err != nil {
+		return nil, err
+	}
+	result := &progressResult{ReviewID: review.ID, WeightedScore: review.WeightedScore,
+		ProposedOutcome: review.ProposedOutcome, FinalizedAt: review.FinalizedAt, Scores: make([]progressScore, 0, len(scores))}
+	for _, s := range scores {
+		result.Scores = append(result.Scores, progressScore{Dimension: s.Dimension, Score: s.Score})
+	}
+	return result, nil
 }
