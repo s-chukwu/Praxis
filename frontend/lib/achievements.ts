@@ -44,16 +44,16 @@ export function getMilestones(learner: Learner, progress: Progress | null): Mile
   return [
     {
       id: 'baseline-verified',
-      title: 'Baseline Verified',
-      message: `You did a great job in the ${track} baseline task! Your progress is now official.`,
-      actionLabel: 'Continue to Learning Plan',
+      title: 'Baseline reviewed',
+      message: `A supervisor has scored your ${track} baseline task. Your result and the courses chosen for you are ready.`,
+      actionLabel: 'See my result and plan',
       actionHref: '/path/plan',
       unlocked: earned('baseline') && earned('reviewed'),
     },
     {
       id: 'plan-completed',
       title: 'Learning Plan Completed',
-      message: `You finished every course in your ${track} learning plan! You are ready for the final task.`,
+      message: `You finished every course in your ${track} learning plan. The final task is next.`,
       actionLabel: 'Continue',
       unlocked: earned('plan') || planFinished,
     },
