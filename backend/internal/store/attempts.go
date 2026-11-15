@@ -132,11 +132,13 @@ func createAttempt(ctx context.Context, q querier, n NewAttempt, actor Actor) (A
 
 }
 
-// CreateOrGetBaselineAttempt gives a candidate their one baseline attempt.
-// If they already have one, it is returned untouched (answers and progress kept)
-// and created is false. If not, a new one is made and created is true.
-// The database index attempts_one_baseline_per_candidate guarantees that two
-// requests at the same moment can never create two attempts.
+// CreateOrGetBaselineAttempt gives a candidate their one active baseline attempt.
+// If they already have one that is not voided, it is returned untouched (answers
+// and progress kept) and created is false. If not, a new one is made and created
+// is true. A voided attempt does not count, so after an admin voids it (reset)
+// the candidate can start again. The database index
+// attempts_one_active_baseline_per_candidate guarantees that two requests at the
+// same moment can never create two active attempts.
 func (s *Store) CreateOrGetBaselineAttempt(ctx context.Context, n NewAttempt, actor Actor) (Attempt, bool, error) {
 	var out Attempt
 	var created bool
@@ -151,13 +153,13 @@ func (s *Store) CreateOrGetBaselineAttempt(ctx context.Context, n NewAttempt, ac
 func createOrGetBaselineAttempt(ctx context.Context, q querier, n NewAttempt, actor Actor) (Attempt, bool, error) {
 	n.Stage = "baseline"
 
-	// Try to insert. If this candidate already has a baseline attempt, the insert
-	// does nothing and returns no row.
+	// Try to insert. If this candidate already has an active baseline attempt, the
+	// insert does nothing and returns no row.
 	row := q.QueryRow(ctx,
 		`insert into attempts (candidate_id, target_track, role_standard_version, scenario_version,
 		                       rubric_version, policy_version, scenario_id, stage)
 		 values ($1, $2, $3, $4, $5, $6, $7, 'baseline')
-		 on conflict (candidate_id) where stage = 'baseline' do nothing
+		 on conflict (candidate_id) where stage = 'baseline' and status <> 'voided' do nothing
 		 returning `+attemptColumns,
 		n.CandidateID, n.TargetTrack, n.RoleStandardVersion, n.ScenarioVersion,
 		n.RubricVersion, n.PolicyVersion, nullable(n.ScenarioID))
@@ -182,10 +184,10 @@ func createOrGetBaselineAttempt(ctx context.Context, q querier, n NewAttempt, ac
 		return Attempt{}, false, err
 	}
 
-	// Nothing was inserted, so one already exists. Return it as it is.
+	// Nothing was inserted, so an active one already exists. Return it as it is.
 	row = q.QueryRow(ctx,
 		`select `+attemptColumns+` from attempts
-		 where candidate_id = $1 and stage = 'baseline'`,
+		 where candidate_id = $1 and stage = 'baseline' and status <> 'voided'`,
 		n.CandidateID)
 	existing, err := scanAttempt(row)
 	if errors.Is(err, pgx.ErrNoRows) {

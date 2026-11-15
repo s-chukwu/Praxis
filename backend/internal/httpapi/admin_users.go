@@ -13,10 +13,12 @@ type UserLister interface {
 }
 
 type adminUserView struct {
-	ID             string `json:"id"`
-	FullName       string `json:"full_name"`
-	Role           string `json:"role"`
-	BaselineStatus string `json:"baseline_status"` // "none" when there is no baseline attempt
+	ID                string  `json:"id"`
+	Email             string  `json:"email"`
+	FullName          string  `json:"full_name"`
+	Role              string  `json:"role"`
+	BaselineAttemptID *string `json:"baseline_attempt_id"` // null when there is no active baseline attempt
+	BaselineStatus    string  `json:"baseline_status"`     // "none" when there is no active baseline attempt
 }
 
 // registerAdminUsersRoute wires GET /v1/admin/users, admin only.
@@ -28,9 +30,9 @@ func registerAdminUsersRoute(mux *http.ServeMux, authn Authenticator, users User
 					"the database is not configured on this server")
 				return
 			}
+
 			list, err := users.ListUsers(r.Context())
 			if err != nil {
-
 				writeStoreError(w, err)
 				return
 			}
@@ -41,7 +43,12 @@ func registerAdminUsersRoute(mux *http.ServeMux, authn Authenticator, users User
 					status = *u.BaselineStatus
 				}
 				views = append(views, adminUserView{
-					ID: u.ID, FullName: u.FullName, Role: u.Role, BaselineStatus: status,
+					ID:                u.ID,
+					Email:             u.Email,
+					FullName:          u.FullName,
+					Role:              u.Role,
+					BaselineAttemptID: u.BaselineAttemptID,
+					BaselineStatus:    status,
 				})
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"users": views})
