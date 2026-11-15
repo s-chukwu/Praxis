@@ -20,7 +20,10 @@ export function milestones(progress: Progress | null): Milestone[] {
     { id: 'final', title: 'Final task', detail: 'A new case shows what improved', kind: 'step' },
     { id: 'certificate', title: 'Certificate', detail: 'Eligible for employer review', kind: 'certificate' },
   ];
-  const done = [submitted, reviewed, planDone, false, false];
+  const finalStatus = progress?.final?.status;
+  const finalSubmitted = Boolean(finalStatus && SUBMITTED.has(finalStatus));
+  // The certificate stays locked in the pilot: the PM made it post-demo.
+  const done = [submitted, reviewed, planDone, finalSubmitted, false];
   const current = done.indexOf(false);
   return items.map((m, i) => ({ ...m, state: done[i] ? 'earned' : i === current ? 'current' : 'locked' }));
 }
