@@ -75,7 +75,7 @@ export default function Guidelines() {
         </h2>
         <p className="text-sm text-muted">Any one of these, once confirmed, fails the safety check whatever the other scores are.</p>
         <ul className="divide-y divide-line rounded-panel border border-danger/20 bg-surface">
-          {CRITICAL_EVENTS.map(([title, text]) => (
+          {CRITICAL_EVENTS.map(([, title, text]) => (
             <li key={title} className="p-5">
               <p className="font-semibold text-danger">{title}</p>
               <p className="mt-0.5 text-sm text-muted">{text}</p>

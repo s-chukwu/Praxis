@@ -6,6 +6,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import ScorePicker from '@/components/reviewer/ScorePicker';
 import { programs, skillNames } from '@/lib/catalog';
+import { CRITICAL_EVENTS } from '@/lib/rubric';
 import { friendly } from '@/lib/errors';
 import {
   clearDraft,
@@ -13,9 +14,11 @@ import {
   getQueue,
   loadDraft,
   openReview,
+  saveFindings,
   saveScores,
   storeDraft,
   type Draft,
+  type Finding,
   type QueueItem,
   type Review,
   type ReviewCase,
@@ -36,6 +39,7 @@ const ANSWER_LABELS: Record<string, string> = {
 };
 
 type Dim = { score?: number; evidence: string };
+type Event = { quote: string; policy: string };
 const squash = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
 export default function ReviewPage() {
@@ -45,6 +49,7 @@ export default function ReviewPage() {
   const [rc, setRc] = useState<ReviewCase | null>(null);
   const [dims, setDims] = useState<Record<string, Dim>>({});
   const [draft, setDraft] = useState<Draft>({ competencies: {}, notes: '' });
+  const [events, setEvents] = useState<Record<string, Event>>({});
   const [loadError, setLoadError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
@@ -63,6 +68,11 @@ export default function ReviewPage() {
       setRc(opened.reviewCase);
       setDims(Object.fromEntries(opened.review.scores.map((s) => [s.dimension, { score: s.score, evidence: s.evidence[0] ?? '' }])));
       setDraft(loadDraft(opened.review.id));
+      setEvents(
+        Object.fromEntries(
+          opened.review.findings.filter((f) => f.decision === 'confirmed').map((f) => [f.event_type, { quote: f.supporting_quote, policy: f.policy_reference }]),
+        ),
+      );
     })().catch((e) => setLoadError(e instanceof Error && e.message.startsWith('This case') ? e.message : friendly(e)));
   }, [attemptId]);
 
@@ -105,6 +115,19 @@ export default function ReviewPage() {
     if (!allAnswers.includes(squash(quote))) return 'This quote is not in the candidate’s answers. Copy it exactly.';
     return '';
   };
+  const checkEvent = (e: Event) => {
+    const quote = e.quote.trim();
+    if (quote.length < 12 || quote.length > 500 || !allAnswers.includes(squash(quote))) return 'Paste the exact words from the answers (12 to 500 characters).';
+    if (!e.policy.trim()) return 'Name the rule that was broken.';
+    return '';
+  };
+  const toFindings = (): Finding[] =>
+    Object.entries(events).map(([id, e]) => ({ event_type: id, supporting_quote: e.quote.trim(), policy_reference: e.policy.trim(), decision: 'confirmed' }));
+  const setEvent = (id: string, e: Event | null) => {
+    setEvents(({ [id]: _, ...rest }) => (e ? { ...rest, [id]: e } : rest));
+    setErrors(({ [id]: _, ...rest }) => rest);
+  };
+
   const scored = () =>
     DIMENSIONS.filter((d) => dims[d.id]?.score !== undefined && !checkDim(d.id, dims[d.id])).map((d) => ({
       dimension: d.id,
@@ -119,6 +142,8 @@ export default function ReviewPage() {
     try {
       const ready = scored();
       if (ready.length) await saveScores(review.id, ready);
+      const valid = toFindings().filter((f) => !checkEvent({ quote: f.supporting_quote, policy: f.policy_reference }));
+      await saveFindings(review.id, valid);
       setNotice('Draft saved');
     } catch (e) {
       setFormError(friendly(e));
@@ -133,6 +158,10 @@ export default function ReviewPage() {
       if (msg) found[d.id] = msg;
     }
     for (const c of competencies) if (draft.competencies[c] === undefined) found[c] = 'Score this skill.';
+    for (const [id, e] of Object.entries(events)) {
+      const msg = checkEvent(e);
+      if (msg) found[id] = msg;
+    }
     setErrors(found);
     if (Object.keys(found).length) return setFormError(`Finish ${Object.keys(found).length} more item(s) before submitting.`);
 
@@ -140,6 +169,7 @@ export default function ReviewPage() {
     setFormError('');
     try {
       await saveScores(review.id, scored());
+      await saveFindings(review.id, toFindings());
       await finalizeReview(review.id, { competencies: Object.fromEntries(competencies.map((c) => [c, draft.competencies[c]])), notes: draft.notes });
       clearDraft(review.id);
       setDone(true);
@@ -257,6 +287,53 @@ export default function ReviewPage() {
                 ))}
               </div>
             </div>
+
+            <fieldset className="rounded-panel border border-danger/20 bg-surface p-5">
+              <legend className="px-1 font-bold">Critical events</legend>
+              <p className="text-sm text-muted">Tick only what clearly happened. A confirmed event fails the safety check, whatever the scores.</p>
+              <div className="mt-3 space-y-3">
+                {CRITICAL_EVENTS.map(([id, title, text]) => {
+                  const e = events[id];
+                  return (
+                    <div key={id}>
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(e)}
+                          onChange={(ev) => setEvent(id, ev.target.checked ? { quote: '', policy: '' } : null)}
+                          className="mt-1 h-4 w-4 accent-[#C2412D]"
+                        />
+                        <span>
+                          <span className="font-medium">{title}</span>
+                          <span className="block text-sm text-muted">{text}</span>
+                        </span>
+                      </label>
+                      {e && (
+                        <div className="mt-2 space-y-2 pl-7">
+                          <textarea
+                            aria-label={`${title}: quote from the answers`}
+                            rows={2}
+                            value={e.quote}
+                            onChange={(ev) => setEvent(id, { ...e, quote: ev.target.value })}
+                            placeholder="Exact words from the answers"
+                            className="w-full resize-y rounded-control border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                          />
+                          <input
+                            aria-label={`${title}: rule broken`}
+                            maxLength={200}
+                            value={e.policy}
+                            onChange={(ev) => setEvent(id, { ...e, policy: ev.target.value })}
+                            placeholder="Rule broken, for example: refunds need finance approval"
+                            className="w-full rounded-control border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                          />
+                          {errors[id] && <p className="text-sm font-medium text-danger">{errors[id]}</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
 
             <div className="rounded-panel bg-surface p-5 shadow-panel">
               <label htmlFor="notes" className="font-bold">
