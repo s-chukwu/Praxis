@@ -5,6 +5,7 @@ import { LearnerProvider, useLearner } from './LearnerProvider';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import ErrorScreen from './ErrorScreen';
+import AchievementPopup from './achievements/AchievementPopup';
 import { PREVIEW } from '@/lib/learner';
 
 // The landing page belongs to another team; these routes render without the learner shell.
@@ -61,6 +62,7 @@ function Frame({ children }: { children: React.ReactNode }) {
         <Topbar onMenu={() => setMenuOpen(true)} />
         <main className="mx-auto w-full max-w-[1120px] flex-1 px-5 py-8 md:px-10 md:py-10">{children}</main>
       </div>
+      <AchievementPopup />
     </div>
   );
 }
