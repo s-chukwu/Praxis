@@ -38,7 +38,7 @@ export type ReviewCase = {
 };
 
 // Draft competency scores and notes have no backend column, so they wait in this browser until finalize.
-export type Draft = { competencies: Record<string, number>; notes: string };
+export type Draft = { competencies: Record<string, number>; notes: string; comments: Record<string, string> };
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
@@ -98,7 +98,7 @@ export async function saveFindings(reviewId: string, findings: Finding[]): Promi
 }
 
 // Finalizing asks the AI service for the weighted score, then builds the candidate's plan from the skill scores.
-export async function finalizeReview(reviewId: string, draft: Draft): Promise<void> {
+export async function finalizeReview(reviewId: string, draft: Pick<Draft, 'competencies' | 'notes'>): Promise<void> {
   if (PREVIEW) return;
   try {
     await request('POST', `/v1/reviews/${reviewId}/finalize`, { reviewed_competencies: draft.competencies, notes: draft.notes });
@@ -119,9 +119,9 @@ const draftKey = (reviewId: string) => `praxis.review-draft.${reviewId}`;
 
 export function loadDraft(reviewId: string): Draft {
   try {
-    return { competencies: {}, notes: '', ...JSON.parse(localStorage.getItem(draftKey(reviewId)) ?? '{}') };
+    return { competencies: {}, notes: '', comments: {}, ...JSON.parse(localStorage.getItem(draftKey(reviewId)) ?? '{}') };
   } catch {
-    return { competencies: {}, notes: '' };
+    return { competencies: {}, notes: '', comments: {} };
   }
 }
 

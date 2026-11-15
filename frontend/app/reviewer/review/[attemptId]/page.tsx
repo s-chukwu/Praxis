@@ -60,7 +60,7 @@ export default function ReviewPage() {
   const [review, setReview] = useState<Review | null>(null);
   const [rc, setRc] = useState<ReviewCase | null>(null);
   const [dims, setDims] = useState<Record<string, Dim>>({});
-  const [draft, setDraft] = useState<Draft>({ competencies: {}, notes: '' });
+  const [draft, setDraft] = useState<Draft>({ competencies: {}, notes: '', comments: {} });
   const [events, setEvents] = useState<Record<string, Event>>({});
   const [loadError, setLoadError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -68,6 +68,7 @@ export default function ReviewPage() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState<'save' | 'submit' | null>(null);
   const [done, setDone] = useState(false);
+  const [picked, setPicked] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -112,6 +113,21 @@ export default function ReviewPage() {
     setDims((all) => ({ ...all, [id]: { ...(all[id] ?? { evidence: '' }), ...patch } }));
     setErrors(({ [id]: _, ...rest }) => rest);
   };
+  const setComment = (id: string, text: string) => {
+    const next = { ...draft, comments: { ...draft.comments, [id]: text } };
+    setDraft(next);
+    storeDraft(review.id, next);
+  };
+  // Area comments travel with the review notes, since the backend stores one notes field per review.
+  const notesWithComments = () =>
+    [
+      ...DIMENSIONS.filter((d) => draft.comments[d.id]?.trim()).map((d) => `${d.title}: ${draft.comments[d.id].trim()}`),
+      draft.notes.trim(),
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 2000);
+
   const setCompetency = (code: string, score: number) => {
     const next = { ...draft, competencies: { ...draft.competencies, [code]: score } };
     setDraft(next);
@@ -123,8 +139,10 @@ export default function ReviewPage() {
   const checkDim = (id: string, d?: Dim) => {
     if (d?.score === undefined) return 'Choose a score.';
     const quote = d.evidence.trim();
-    if (quote.length < 12 || quote.length > 500) return 'Paste a quote of 12 to 500 characters.';
-    if (!allAnswers.includes(squash(quote))) return 'This quote is not in the candidate’s answers. Copy it exactly.';
+    // A 0 or 1 can rest on what the candidate left out, so it needs no quote.
+    if (!quote) return d.score <= 1 ? '' : 'A score of 2 or more needs a quote. Select words in an answer, then click this area.';
+    if (quote.length < 12 || quote.length > 500) return 'A quote must be 12 to 500 characters.';
+    if (!allAnswers.includes(squash(quote))) return 'This quote is not in the candidate’s answers. Select it from the answer instead of typing it.';
     return '';
   };
   const checkEvent = (e: Event) => {
@@ -144,7 +162,7 @@ export default function ReviewPage() {
     DIMENSIONS.filter((d) => dims[d.id]?.score !== undefined && !checkDim(d.id, dims[d.id])).map((d) => ({
       dimension: d.id,
       score: dims[d.id].score as number,
-      evidence: [dims[d.id].evidence.trim()],
+      evidence: dims[d.id].evidence.trim() ? [dims[d.id].evidence.trim()] : [],
     }));
 
   const saveDraft = async () => {
@@ -182,7 +200,7 @@ export default function ReviewPage() {
     try {
       await saveScores(review.id, scored());
       await saveFindings(review.id, toFindings());
-      await finalizeReview(review.id, { competencies: Object.fromEntries(competencies.map((c) => [c, draft.competencies[c]])), notes: draft.notes });
+      await finalizeReview(review.id, { competencies: Object.fromEntries(competencies.map((c) => [c, draft.competencies[c]])), notes: notesWithComments() });
       clearDraft(review.id);
       setDone(true);
     } catch (e) {
@@ -228,7 +246,34 @@ export default function ReviewPage() {
         <p className="mt-1 text-muted">{programs[rc.program].name} · Baseline task</p>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
-          <section aria-labelledby="evidence-title" className="space-y-4 lg:sticky lg:top-20">
+          <section
+            aria-labelledby="evidence-title"
+            className="space-y-4 lg:sticky lg:top-20"
+            onMouseUp={() => setPicked(window.getSelection()?.toString().trim() ?? '')}
+            onKeyUp={() => setPicked(window.getSelection()?.toString().trim() ?? '')}
+          >
+            {picked.length >= 12 && (
+              <div role="status" className="sticky top-16 z-10 rounded-control bg-ink p-3 text-sm text-white shadow-lift">
+                <p className="line-clamp-2 text-white/80">“{picked}”</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-white/60">Use as evidence for</span>
+                  {DIMENSIONS.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => {
+                        setDim(d.id, { evidence: picked.slice(0, 500) });
+                        setPicked('');
+                        window.getSelection()?.removeAllRanges();
+                      }}
+                      className="rounded-full bg-white/10 px-3 py-1 font-semibold hover:bg-white/20"
+                    >
+                      {d.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <h2 id="evidence-title" className="sr-only">
               Candidate evidence
             </h2>
@@ -257,7 +302,9 @@ export default function ReviewPage() {
               <h2 id="rubric-title" className="font-bold">
                 Rubric
               </h2>
-              <p className="text-sm text-muted">Score 0 to 4. Paste a quote from the answers as evidence for each.</p>
+              <p className="text-sm text-muted">
+                Score 0 to 4. A quote is the candidate’s own words, picked from the left; it is needed for 2 or more. Write your own view in the comment box.
+              </p>
               <div className="mt-4 space-y-5">
                 {DIMENSIONS.map((d) => (
                   <div key={d.id}>
@@ -268,13 +315,27 @@ export default function ReviewPage() {
                       </div>
                       <ScorePicker label={`${d.title} score`} value={dims[d.id]?.score} onChange={(n) => setDim(d.id, { score: n })} />
                     </div>
+                    <label className="mt-3 block text-[13px] font-semibold text-muted" htmlFor={`${d.id}-quote`}>
+                      Quote from the answer {(dims[d.id]?.score ?? 4) <= 1 && <span className="font-normal">(optional for 0 or 1)</span>}
+                    </label>
                     <textarea
-                      aria-label={`${d.title} evidence quote`}
+                      id={`${d.id}-quote`}
                       rows={2}
                       value={dims[d.id]?.evidence ?? ''}
                       onChange={(e) => setDim(d.id, { evidence: e.target.value })}
-                      placeholder="Quote from the candidate’s answer"
-                      className="mt-2 w-full resize-y rounded-control border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                      placeholder="Select the candidate’s words on the left, then click this area"
+                      className="mt-1 w-full resize-y rounded-control border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none"
+                    />
+                    <label className="mt-2 block text-[13px] font-semibold text-muted" htmlFor={`${d.id}-comment`}>
+                      Your comment
+                    </label>
+                    <input
+                      id={`${d.id}-comment`}
+                      maxLength={300}
+                      value={draft.comments[d.id] ?? ''}
+                      onChange={(e) => setComment(d.id, e.target.value)}
+                      placeholder="For example: did not state what the records show"
+                      className="mt-1 w-full rounded-control border border-line px-3 py-2 text-sm focus:border-brand focus:outline-none"
                     />
                     {errors[d.id] && <p className="mt-1 text-sm font-medium text-danger">{errors[d.id]}</p>}
                   </div>
