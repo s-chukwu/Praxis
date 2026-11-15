@@ -6,35 +6,26 @@ Show the candidate and reviewer flow end to end in 8 to 10 minutes.
 
 The story is simple: a candidate starts with one real support case, a reviewer scores it against a rubric, and the candidate gets a result and a learning plan built from the gaps.
 
-## Hard blockers before the demo
+## Current release state
 
-### 1. Candidate progress route is missing
+At the time of writing, `main` is `85359ec`.
 
-`GET /v1/me/progress` returns 404 because `registerProgressRoute` is missing from `backend/internal/httpapi/router.go`.
+- `GET /v1/me/progress` is registered and returns `200` for a candidate.
+- `/debug/panic` is removed and returns `404`.
+- The web image is built with `NEXT_PUBLIC_API_MODE=live`, so profile editing, CV replace/delete, and account deletion use the backend.
+- Courses and the final task are part of the candidate dashboard and plan flow.
+- The browser CV upload is PDF only. DOCX and TXT files are rejected; the candidate can paste or edit the extracted text.
 
-The dashboard result story, training record, and learning plan all depend on this route. Do not run the result and plan part of the demo until it is fixed.
-
-Backend owner fix, after `registerQueueRoute`:
-
-```go
-var progressReviews ProgressReviews
-if db != nil {
-    progressReviews = db
-}
-registerProgressRoute(mux, authn, attempts, progressReviews, plans)
-```
-
-Verify:
+Verify before the demo:
 
 ```bash
 curl -i "$BACKEND_URL/v1/me/progress" -H "Authorization: Bearer $CANDIDATE_TOKEN"
+curl -i "$BACKEND_URL/debug/panic"
 ```
 
-Expected: `200` for a candidate, `401` without a token, `403` for a reviewer.
+Expected: progress `200` for a candidate, `401` without a token, `403` for a reviewer; debug panic `404`.
 
-### 2. Debug panic route is public
-
-`/debug/panic` is publicly reachable and returns 502. Remove it or protect it before the demo.
+If the progress route regresses, use the fallback in [Progress route still returns 404](#progress-route-still-returns-404). Do not block the demo on a redeploy.
 
 ## Demo roles
 
@@ -49,10 +40,11 @@ Run this 30 minutes before the demo.
 
 - Scale web, backend, and AI to `min-replicas 1`.
 - Run `./scripts/smoke.sh` and confirm it passes.
-- Confirm web, backend, and AI all run the current `main` image. At the time of writing that is `553440d`.
+- Confirm web, backend, and AI all run the current `main` image. At the time of writing that is `85359ec`.
 - Confirm the backend `AI_SERVICE_URL` is `https://praxis-ai.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io`.
-- Confirm `GET /v1/me/progress` returns 200 for the demo candidate. If it still returns 404, use the fallback IDs in the progress route section below.
-- Confirm `/debug/panic` is removed or protected.
+- Confirm `GET /v1/me/progress` returns 200 for the demo candidate. If it returns 404, use the fallback IDs in the progress route section below.
+- Confirm `/debug/panic` returns 404.
+- Confirm the web image was built with `NEXT_PUBLIC_API_MODE=live`.
 - Prepare the demo candidate account. Use a fresh email such as `demo.candidate+<date>@example.com`.
 - Test accounts are created for candidate, reviewer, admin, and fallback. The passwords are shared in the team chat, not in this file.
 - A fifth account, the pre-submitted fallback, is listed in the reviewer queue fallback section.
@@ -60,7 +52,8 @@ Run this 30 minutes before the demo.
 - Prepare the admin account for the reset fallback.
 - Confirm email confirmation is off for testing. If it is on, use pre-confirmed accounts.
 - Open the candidate and reviewer browsers side by side.
-- Open `/`, `/signup`, `/dashboard`, `/path/baseline`, `/reviewer`, and `/reviewer/reviews` once so nothing is cold.
+- Open `/`, `/signup`, `/dashboard`, `/path/baseline`, one course page, `/reviewer`, and `/reviewer/reviews` once so nothing is cold.
+- If you plan to show the final task, open it once too.
 - Have the demo answers from this file ready to paste.
 - Have one pre-submitted baseline attempt ready as a reviewer fallback.
 
@@ -111,7 +104,7 @@ Say:
 
 > The dashboard always shows one next step. The training record below shows where the candidate is in the journey.
 
-Do not rely on the result story or plan on this screen until the progress route is fixed.
+The result story and plan load from the progress route. If the result card is empty, use the fallback below. The dashboard also shows course and final-task steps; the demo can stay on the baseline and plan path.
 
 ### 3:00 to 4:30 - Baseline task
 
@@ -158,7 +151,7 @@ Say:
 
 > The candidate sees one strength and one place to start, not a wall of scores. The plan lists only the courses the review selected.
 
-This segment requires the progress route fix.
+This segment requires the progress route to be deployed. It is on `main` at `85359ec`. The plan includes course pages and a final task; show the ordered courses and stop before the final task if time is short.
 
 ### 8:30 to 9:00 - Close
 
@@ -281,7 +274,7 @@ Demo IDs:
 - Plan: `564978f9-a55c-47d1-a92b-aa25b8d0ead4`
 - Expected: weighted score `85`, outcome `evidence_verified`, modules `M-ROLE`, `M-SAFE`, `M-CHALLENGE`.
 
-Show the JSON or a screenshot. State clearly that the live result screen is blocked by the missing progress route. Do not claim the dashboard result screen works.
+Show the JSON or a screenshot. State clearly that the live result screen is blocked by a progress route regression. Do not claim the dashboard result screen works.
 
 ### A page is cold or times out
 

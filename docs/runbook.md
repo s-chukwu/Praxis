@@ -12,11 +12,15 @@ This covers deploys, rollback, scaling, and checks for the Azure Container Apps 
 
 The AI service uses external ingress. The environment is an express environment, so internal-only networking is not available. The HMAC signature requirement is what protects it; unsigned calls return 401.
 
-## Known blockers (15 November 2026)
+## Current release state (15 November 2026)
 
-- `GET /v1/me/progress` returns 404. `registerProgressRoute` was missing from `backend/internal/httpapi/router.go`; the handler exists in `progress.go`. A fix is applied locally and verified with `go test ./...`, but live still returns 404 until it is merged and deployed. This blocks the dashboard result, training record, learning plan, and milestone popups. The demo script has API fallbacks.
-- `GET /debug/panic` is public and returns 502. Remove or protect it before the demo.
+- `main` is `85359ec`. The Release workflow deployed web, backend, and AI on that SHA.
+- `GET /v1/me/progress` is registered and returns `200` for a candidate.
+- `/debug/panic` is removed and returns `404`.
+- The web image is built with `NEXT_PUBLIC_API_MODE=live`, so profile editing, CV replace/delete, and account deletion use the backend.
+- Courses and the final task are part of the candidate dashboard and plan flow.
 - The browser CV upload is PDF only. DOCX and TXT files are rejected; the candidate can paste or edit the extracted text.
+- If the progress route regresses, use the fallback IDs in `docs/demo-script.md`.
 
 ## Deploy
 
@@ -25,6 +29,8 @@ Deploys are automatic. Merging to `main` runs the Release workflow, which:
 1. Builds `backend`, `ai`, and `web` images and pushes them to GHCR tagged with the commit SHA and `latest`.
 2. Logs in to Azure with OIDC using the `praxis-deployer` app registration.
 3. Updates all three container apps to the new SHA.
+
+The web build reads `NEXT_PUBLIC_*` values from repository variables. Keep `NEXT_PUBLIC_API_MODE=live` set for production, or the web app falls back to browser-local demo state.
 
 No manual step is needed. Watch it under the repo's **Actions** tab.
 
@@ -102,7 +108,8 @@ Before:
 - Open every page you plan to show once, so nothing is cold.
 - Confirm the deployed SHA equals `main`.
 - Confirm `GET /v1/me/progress` returns 200 for the demo candidate. If it returns 404, use the fallback IDs in `docs/demo-script.md`.
-- Confirm `/debug/panic` is removed or protected.
+- Confirm `/debug/panic` returns 404.
+- Confirm the web image was built with `NEXT_PUBLIC_API_MODE=live`.
 - Keep the Azure revisions page and Log Analytics open in separate tabs.
 
 During:
