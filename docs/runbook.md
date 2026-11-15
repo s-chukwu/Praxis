@@ -10,7 +10,13 @@ This covers deploys, rollback, scaling, and checks for the Azure Container Apps 
 | Backend | https://praxis-backend.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
 | AI | https://praxis-ai.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
 
-The AI service is configured with internal ingress. The environment is an express environment, so that is not network-isolated, and the HMAC signature requirement is what protects it.
+The AI service uses external ingress. The environment is an express environment, so internal-only networking is not available. The HMAC signature requirement is what protects it; unsigned calls return 401.
+
+## Known blockers (15 November 2026)
+
+- `GET /v1/me/progress` returns 404. `registerProgressRoute` was missing from `backend/internal/httpapi/router.go`; the handler exists in `progress.go`. A fix is applied locally and verified with `go test ./...`, but live still returns 404 until it is merged and deployed. This blocks the dashboard result, training record, learning plan, and milestone popups. The demo script has API fallbacks.
+- `GET /debug/panic` is public and returns 502. Remove or protect it before the demo.
+- The browser CV upload is PDF only. DOCX and TXT files are rejected; the candidate can paste or edit the extracted text.
 
 ## Deploy
 
@@ -95,6 +101,8 @@ Before:
 - Run `./scripts/smoke.sh`.
 - Open every page you plan to show once, so nothing is cold.
 - Confirm the deployed SHA equals `main`.
+- Confirm `GET /v1/me/progress` returns 200 for the demo candidate. If it returns 404, use the fallback IDs in `docs/demo-script.md`.
+- Confirm `/debug/panic` is removed or protected.
 - Keep the Azure revisions page and Log Analytics open in separate tabs.
 
 During:

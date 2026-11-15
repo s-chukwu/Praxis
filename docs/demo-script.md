@@ -49,12 +49,13 @@ Run this 30 minutes before the demo.
 
 - Scale web, backend, and AI to `min-replicas 1`.
 - Run `./scripts/smoke.sh` and confirm it passes.
-- Confirm web, backend, and AI are all on image `8503c49`.
+- Confirm web, backend, and AI all run the current `main` image. At the time of writing that is `553440d`.
 - Confirm the backend `AI_SERVICE_URL` is `https://praxis-ai.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io`.
-- Confirm `GET /v1/me/progress` returns 200 for the demo candidate.
+- Confirm `GET /v1/me/progress` returns 200 for the demo candidate. If it still returns 404, use the fallback IDs in the progress route section below.
 - Confirm `/debug/panic` is removed or protected.
 - Prepare the demo candidate account. Use a fresh email such as `demo.candidate+<date>@example.com`.
 - Test accounts are created for candidate, reviewer, admin, and fallback. The passwords are shared in the team chat, not in this file.
+- A fifth account, the pre-submitted fallback, is listed in the reviewer queue fallback section.
 - Prepare the reviewer account and confirm it has the reviewer role.
 - Prepare the admin account for the reset fallback.
 - Confirm email confirmation is off for testing. If it is on, use pre-confirmed accounts.
@@ -249,7 +250,13 @@ The candidate can then start a new baseline attempt. Never commit the admin toke
 
 ### Reviewer queue is empty
 
-Use the pre-submitted fallback candidate. Confirm the baseline status is `submitted` in the admin user list.
+Use the pre-submitted fallback candidate:
+
+- Email: `demo.submitted.1794773958@example.com`
+- Attempt: `9c749f78-fc1f-4e27-8ac3-26dcc723d4d2`
+- Candidate ref: `C-a42f30cd`
+
+Confirm the baseline status is `submitted` in the admin user list. The password is the shared demo password, not stored in this file.
 
 ### Reviewer finalize fails
 
@@ -257,7 +264,24 @@ Retry once. If the AI service is still unavailable, use the pre-finalized fallba
 
 ### Progress route still returns 404
 
-Stop after the reviewer submits. Do not show the candidate result, training record, or learning plan. Use screenshots or the API response as a last resort, and state clearly that the live result screen is blocked by a backend route that is still being fixed.
+The dashboard, result, training record, plan, and milestone popups depend on `GET /v1/me/progress`. If it still returns 404, do not show those screens live. Stop after the reviewer submits.
+
+Use the pre-finalized demo review and plan as the fallback. Fetch them with the candidate token:
+
+```bash
+curl -s "$BACKEND_URL/v1/reviews/$REVIEW_ID" \
+  -H "Authorization: Bearer $CANDIDATE_TOKEN"
+
+curl -s "$BACKEND_URL/v1/reviews/$REVIEW_ID/learning-plan" \
+  -H "Authorization: Bearer $CANDIDATE_TOKEN"
+```
+
+Demo IDs:
+- Review: `b9aa26b4-a4ca-4628-a6fc-857b8dbe738c`
+- Plan: `564978f9-a55c-47d1-a92b-aa25b8d0ead4`
+- Expected: weighted score `85`, outcome `evidence_verified`, modules `M-ROLE`, `M-SAFE`, `M-CHALLENGE`.
+
+Show the JSON or a screenshot. State clearly that the live result screen is blocked by the missing progress route. Do not claim the dashboard result screen works.
 
 ### A page is cold or times out
 
