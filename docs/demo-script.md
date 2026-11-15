@@ -49,10 +49,12 @@ Run this 30 minutes before the demo.
 
 - Scale web, backend, and AI to `min-replicas 1`.
 - Run `./scripts/smoke.sh` and confirm it passes.
-- Confirm the deployed SHA equals `main`.
+- Confirm web, backend, and AI are all on image `8503c49`.
+- Confirm the backend `AI_SERVICE_URL` is `https://praxis-ai.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io`.
 - Confirm `GET /v1/me/progress` returns 200 for the demo candidate.
 - Confirm `/debug/panic` is removed or protected.
 - Prepare the demo candidate account. Use a fresh email such as `demo.candidate+<date>@example.com`.
+- Test accounts are created for candidate, reviewer, admin, and fallback. The passwords are shared in the team chat, not in this file.
 - Prepare the reviewer account and confirm it has the reviewer role.
 - Prepare the admin account for the reset fallback.
 - Confirm email confirmation is off for testing. If it is on, use pre-confirmed accounts.
