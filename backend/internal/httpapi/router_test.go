@@ -134,3 +134,29 @@ func TestRouter_MeEndToEnd(t *testing.T) {
 		}
 	})
 }
+
+// Every route the frontend calls must stay registered. A merge once dropped /v1/me/progress
+// and left every reviewed candidate stuck on "under review"; this test stops that happening again.
+func TestRouter_FrontendRoutesAreRegistered(t *testing.T) {
+	h := NewRouter(config.Config{CORSAllowedOrigin: "http://localhost:3000"})
+	routes := [][2]string{
+		{http.MethodGet, "/v1/me"},
+		{http.MethodGet, "/v1/me/progress"},
+		{http.MethodGet, "/v1/me/learner"},
+		{http.MethodPatch, "/v1/me/learner"},
+		{http.MethodDelete, "/v1/me"},
+		{http.MethodGet, "/v1/baseline/scenario"},
+		{http.MethodPost, "/v1/attempts/baseline"},
+		{http.MethodGet, "/v1/attempts"},
+		{http.MethodGet, "/v1/review-queue"},
+		{http.MethodGet, "/v1/reviews"},
+		{http.MethodGet, "/v1/admin/users"},
+	}
+	for _, r := range routes {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(r[0], r[1], nil))
+		if rec.Code == http.StatusNotFound || rec.Code == http.StatusMethodNotAllowed {
+			t.Errorf("%s %s is not registered (got %d)", r[0], r[1], rec.Code)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/s-chukwu/Praxis/backend/internal/aiclient"
 	"github.com/s-chukwu/Praxis/backend/internal/auth"
@@ -63,7 +64,6 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 		panic("sentry test")
 	})
 
-
 	mux.Handle("GET /v1/me", requireRole(authn)(http.HandlerFunc(me)))
 	registerAttemptRoutes(mux, authn, attempts)
 	registerReviewRoutes(mux, authn, reviews)
@@ -75,6 +75,21 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	registerQueueRoute(mux, authn, attempts, reviews)
 	registerAdminRoutes(mux, authn, roles)
 	registerAdminUsersRoute(mux, authn, userLister)
+
+	// The candidate dashboard reads this; without it every reviewed baseline looks stuck "under review".
+	var progressReviews ProgressReviews
+	var learners LearnerStore
+	if db != nil {
+		progressReviews = db
+		learners = db
+	}
+	registerProgressRoute(mux, authn, attempts, progressReviews, plans)
+
+	var accounts AccountCloser
+	if strings.TrimSpace(cfg.SupabaseURL) != "" && cfg.SupabaseServiceRoleKey != "" {
+		accounts = auth.NewProfiles(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)
+	}
+	registerLearnerRoutes(mux, authn, learners, accounts)
 
 	return cors(cfg.CORSAllowedOrigin, mux)
 }
