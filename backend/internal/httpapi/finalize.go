@@ -321,7 +321,12 @@ func (h *finalizeHandlers) finalize(w http.ResponseWriter, r *http.Request) {
 		Artifacts:       artifacts,
 	}
 	for _, s := range scores {
-		payload.Dimensions[s.Dimension] = dimensionBody{Score: s.Score, Evidence: s.Evidence}
+		// Never send null: the AI service wants a list, empty when a low score has nothing to quote.
+		evidence := s.Evidence
+		if evidence == nil {
+			evidence = []string{}
+		}
+		payload.Dimensions[s.Dimension] = dimensionBody{Score: s.Score, Evidence: evidence}
 	}
 	hasConfirmed := false
 	for _, f := range findings {

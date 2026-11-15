@@ -93,6 +93,8 @@ func scanReview(row rowScanner) (Review, error) {
 	return r, err
 }
 
+const quoteRequiredFrom = 2
+
 func validQuote(q string) bool {
 	n := len([]rune(strings.TrimSpace(q)))
 	return n >= 12 && n <= 500
@@ -111,8 +113,9 @@ func validateScores(scores []ScoreInput) error {
 		if s.Score < 0 || s.Score > 4 {
 			return fmt.Errorf("%w: score for %s must be 0 to 4", ErrInvalidInput, s.Dimension)
 		}
-		if len(s.Evidence) < 1 || len(s.Evidence) > 10 {
-			return fmt.Errorf("%w: %s needs 1 to 10 evidence quotes", ErrInvalidInput, s.Dimension)
+		// Same rule as the AI service: a 0 or 1 can rest on what is missing, 2 or more needs a quote.
+		if len(s.Evidence) > 10 || (s.Score >= quoteRequiredFrom && len(s.Evidence) == 0) {
+			return fmt.Errorf("%w: %s needs a quote from the answers for a score of 2 or more, and at most 10", ErrInvalidInput, s.Dimension)
 		}
 		for _, q := range s.Evidence {
 			if !validQuote(q) {
