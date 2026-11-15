@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useLearner } from '@/components/LearnerProvider';
 import { friendly } from '@/lib/errors';
 import { PREVIEW } from '@/lib/learner';
-import { listUsers, setRole, type AdminUser } from '@/lib/admin';
+import { listUsers, resetBaseline, setRole, type AdminUser } from '@/lib/admin';
 
 const BASELINE: Record<string, string> = {
   none: 'Not started',
@@ -37,7 +37,7 @@ export default function AdminUsers() {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (users ?? []).filter((u) => !q || u.full_name.toLowerCase().includes(q) || u.id.startsWith(q));
+    return (users ?? []).filter((u) => !q || u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   }, [users, query]);
 
   if (!PREVIEW && role !== 'admin') {
@@ -59,6 +59,22 @@ export default function AdminUsers() {
     setBusy('');
   };
 
+  const reset = async (u: AdminUser) => {
+    if (!u.baseline_attempt_id) return;
+    // This throws away the candidate's answers, so it always asks.
+    if (!window.confirm(`Reset ${u.full_name || u.email}'s baseline? Their current answers are closed and they start the task again.`)) return;
+    setBusy(u.id);
+    setError('');
+    try {
+      await resetBaseline(u.baseline_attempt_id);
+      setUsers((all) => all?.map((x) => (x.id === u.id ? { ...x, baseline_attempt_id: null, baseline_status: 'none' } : x)) ?? null);
+      setNotice(`${u.full_name || u.email} can start the baseline again.`);
+    } catch (e) {
+      setError(friendly(e));
+    }
+    setBusy('');
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader title="Users" description="Reviewers are invite only. Make someone a reviewer after they have signed up." />
@@ -70,7 +86,7 @@ export default function AdminUsers() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name"
+          placeholder="Search by name or email"
           className="h-10 w-full rounded-control border border-line bg-surface pl-9 pr-3 text-sm focus:border-brand focus:outline-none"
         />
       </label>
@@ -83,7 +99,7 @@ export default function AdminUsers() {
 
       {users && (
         <div className="overflow-x-auto rounded-panel bg-surface shadow-panel">
-          <table className="w-full min-w-[560px] text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="border-b border-line text-muted">
               <tr>
                 <th className="px-5 py-3 font-medium">Name</th>
@@ -99,11 +115,16 @@ export default function AdminUsers() {
                 <tr key={u.id}>
                   <td className="px-5 py-3">
                     <p className="font-medium">{u.full_name || 'No name'}</p>
-                    <p className="text-xs tabular-nums text-muted">{u.id.slice(0, 8)}</p>
+                    <p className="text-xs text-muted">{u.email}</p>
                   </td>
                   <td className="px-5 py-3">{ROLE_LABEL[u.role] ?? u.role}</td>
                   <td className="px-5 py-3 text-muted">{BASELINE[u.baseline_status] ?? u.baseline_status}</td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="space-x-2 whitespace-nowrap px-5 py-3 text-right">
+                    {u.role === 'candidate' && u.baseline_attempt_id && (
+                      <Button variant="danger" disabled={busy === u.id} onClick={() => reset(u)}>
+                        Reset baseline
+                      </Button>
+                    )}
                     {u.role === 'candidate' && (
                       <Button variant="secondary" loading={busy === u.id} onClick={() => change(u, 'reviewer')}>
                         Make reviewer
