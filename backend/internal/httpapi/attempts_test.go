@@ -56,7 +56,7 @@ func (f *fakeAttempts) CreateAttempt(ctx context.Context, n store.NewAttempt, ac
 		RubricVersion:       n.RubricVersion,
 		PolicyVersion:       n.PolicyVersion,
 		ScenarioID:          &scenario,
-		Stage:               "baseline",
+		Stage:               stageOr(n.Stage),
 		Status:              workflow.Assigned,
 		Answers:             json.RawMessage(`{}`),
 	}
@@ -265,4 +265,12 @@ func TestAttemptRoutesAnswer503WithoutADatabase(t *testing.T) {
 
 	rec := call(t, mux, http.MethodGet, "/v1/attempts", candidateA, "candidate", "")
 	expectStatus(t, rec, http.StatusServiceUnavailable, "no database")
+}
+
+// stageOr mirrors the store: an attempt without a stage is a baseline.
+func stageOr(stage string) string {
+	if stage == "" {
+		return "baseline"
+	}
+	return stage
 }

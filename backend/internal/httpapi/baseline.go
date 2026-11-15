@@ -49,6 +49,7 @@ type catalogBody struct {
 			ExpectedArtifacts []string `json:"expected_artifacts"`
 			CandidateBrief    string   `json:"candidate_brief"`
 			RubricVersion     string   `json:"rubric_version"`
+			ParallelFormID    string   `json:"parallel_form_id"`
 		} `json:"scenarios"`
 	} `json:"scenario_banks"`
 }
@@ -94,6 +95,33 @@ func pick(raw json.RawMessage, scenarioID string) (baselineScenario, error) {
 					RoleStandardVersion: body.Current.RoleStandard,
 					PolicyVersion:       body.Current.AllocationPolicy,
 				}, nil
+			}
+		}
+	}
+	return baselineScenario{}, errScenarioMissing
+}
+
+// pickFinal finds the final-task twin of a baseline scenario in a pinned bank version, using the same
+// candidate-safe fields. The final task uses the baseline's version so the two can be compared.
+func pickFinal(raw json.RawMessage, baselineID, version string) (baselineScenario, error) {
+	var body catalogBody
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return baselineScenario{}, err
+	}
+	for _, bank := range body.ScenarioBanks {
+		if bank.Version != version {
+			continue
+		}
+		twin := ""
+		for _, s := range bank.Scenarios {
+			if s.ID == baselineID {
+				twin = s.ParallelFormID
+			}
+		}
+		for _, s := range bank.Scenarios {
+			if twin != "" && s.ID == twin && s.Stage == "final" && s.CandidateBrief != "" {
+				return baselineScenario{ScenarioID: s.ID, Version: bank.Version, Brief: s.CandidateBrief,
+					TimeboxMinutes: s.TimeboxMinutes, Fields: s.ExpectedArtifacts, RubricVersion: s.RubricVersion}, nil
 			}
 		}
 	}
