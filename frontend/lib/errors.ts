@@ -4,6 +4,17 @@
 
 export class FriendlyError extends Error {}
 
+// A backend refusal with its machine code, so screens can react to specific cases. Its text never reaches the screen.
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(`API ${status} ${code}`);
+  }
+}
+
 export const GENERIC = 'Something went wrong on our side. Try again in a minute.';
 
 export function report(error: unknown) {

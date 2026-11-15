@@ -1,15 +1,12 @@
-'use client';
-import { useEffect, useState } from 'react';
 import { Award, Check, Lock, Medal } from 'lucide-react';
-import { milestones, takeNewlyEarned, type Milestone } from '@/lib/journey';
+import { milestones, type Milestone } from '@/lib/journey';
 import type { Progress } from '@/lib/baseline';
 
-function Mark({ m, fresh }: { m: Milestone; fresh: boolean }) {
+function Mark({ m }: { m: Milestone }) {
   const Icon = m.kind === 'certificate' ? Award : m.kind === 'badge' ? Medal : Check;
   if (m.state === 'earned') {
     return (
-      <span className={`relative flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white ${fresh ? 'animate-pop' : ''}`}>
-        {fresh && <span className="absolute inset-0 animate-[ping_1.1s_cubic-bezier(0.16,1,0.3,1)_1] rounded-full bg-brand/40" aria-hidden />}
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white">
         <Icon className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden />
       </span>
     );
@@ -31,12 +28,7 @@ function Mark({ m, fresh }: { m: Milestone; fresh: boolean }) {
 // A support case moves through states; so does the learner. Agents read this trail at a glance.
 export default function CaseTrail({ progress }: { progress: Progress | null }) {
   const list = milestones(progress);
-  const [fresh, setFresh] = useState<Set<string>>(new Set());
   const earned = list.filter((m) => m.state === 'earned').length;
-
-  useEffect(() => {
-    if (progress) setFresh(takeNewlyEarned(milestones(progress)));
-  }, [progress]);
 
   return (
     <section aria-labelledby="trail-title" className="rounded-panel bg-surface p-6 shadow-panel">
@@ -60,11 +52,10 @@ export default function CaseTrail({ progress }: { progress: Progress | null }) {
                 }`}
               />
             )}
-            <Mark m={m} fresh={fresh.has(m.id)} />
+            <Mark m={m} />
             <div className="min-w-0 pt-1.5 sm:pt-0">
               <p className={`font-semibold leading-snug ${m.state === 'locked' ? 'text-muted' : 'text-ink'}`}>
                 {m.title}
-                {fresh.has(m.id) && <span className="ml-2 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-ink sm:ml-0 sm:mt-1 sm:block sm:w-fit sm:mx-auto">New</span>}
               </p>
               <p className="mt-0.5 text-[13px] leading-snug text-muted">{m.state === 'earned' && m.kind !== 'step' ? 'Earned' : m.detail}</p>
             </div>

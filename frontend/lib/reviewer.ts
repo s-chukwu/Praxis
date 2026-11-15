@@ -1,3 +1,4 @@
+import { ApiError } from './errors';
 import { PREVIEW, request } from './learner';
 
 export type Priority = 'overdue' | 'due_soon' | 'normal';
@@ -24,7 +25,8 @@ export type ReviewSummary = {
 };
 
 export type DimensionScore = { dimension: string; score: number; evidence: string[] };
-export type Review = ReviewSummary & { scores: DimensionScore[] };
+export type Finding = { event_type: string; supporting_quote: string; policy_reference: string; decision: 'confirmed' | 'dismissed' | 'pending' };
+export type Review = ReviewSummary & { scores: DimensionScore[]; findings: Finding[] };
 
 export type ReviewCase = {
   attemptId: string;
@@ -73,7 +75,7 @@ export async function getMyReviews(): Promise<ReviewSummary[]> {
 export async function openReview(item: QueueItem): Promise<{ review: Review; reviewCase: ReviewCase }> {
   const base = { attemptId: item.attempt_id, candidateRef: item.candidate_ref, program: item.program };
   if (PREVIEW) {
-    const review: Review = { id: `review-${item.attempt_id}`, attempt_id: item.attempt_id, finalized_at: null, weighted_score: null, proposed_outcome: null, created_at: hoursAgo(1), scores: [] };
+    const review: Review = { id: `review-${item.attempt_id}`, attempt_id: item.attempt_id, finalized_at: null, weighted_score: null, proposed_outcome: null, created_at: hoursAgo(1), scores: [], findings: [] };
     return { review, reviewCase: { ...base, ...SAMPLE_CASE } };
   }
   const review = await request<Review>('POST', `/v1/attempts/${item.attempt_id}/review`);
@@ -89,11 +91,28 @@ export async function saveScores(reviewId: string, scores: DimensionScore[]): Pr
   await request('PUT', `/v1/reviews/${reviewId}/scores`, { scores });
 }
 
+// Replaces the whole list, so an empty list clears findings the reviewer removed.
+export async function saveFindings(reviewId: string, findings: Finding[]): Promise<void> {
+  if (PREVIEW) return;
+  await request('PUT', `/v1/reviews/${reviewId}/findings`, { findings });
+}
+
 // Finalizing asks the AI service for the weighted score, then builds the candidate's plan from the skill scores.
 export async function finalizeReview(reviewId: string, draft: Draft): Promise<void> {
   if (PREVIEW) return;
-  await request('POST', `/v1/reviews/${reviewId}/finalize`, { reviewed_competencies: draft.competencies, notes: draft.notes });
-  await request('POST', `/v1/reviews/${reviewId}/learning-plan`);
+  try {
+    await request('POST', `/v1/reviews/${reviewId}/finalize`, { reviewed_competencies: draft.competencies, notes: draft.notes });
+  } catch (e) {
+    // A retry after the plan step failed: the review is already locked, so carry on to the plan.
+    if (!(e instanceof ApiError && e.code === 'review_finalized')) throw e;
+  }
+  // Creating the plan is safe to repeat; one retry covers a slow AI service so the candidate is never left waiting.
+  try {
+    await request('POST', `/v1/reviews/${reviewId}/learning-plan`);
+  } catch {
+    await new Promise((r) => setTimeout(r, 1500));
+    await request('POST', `/v1/reviews/${reviewId}/learning-plan`);
+  }
 }
 
 const draftKey = (reviewId: string) => `praxis.review-draft.${reviewId}`;

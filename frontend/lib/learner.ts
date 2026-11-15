@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { FriendlyError, report } from './errors';
+import { ApiError, FriendlyError, report } from './errors';
 import type { ProgramId } from './catalog';
 
 export type SkillStatus = 'suggested' | 'confirmed' | 'rejected' | 'verified';
@@ -10,6 +10,8 @@ export type Learner = {
   onboarded: boolean;
   cvSubmitted: boolean;
   skills: Record<string, SkillStatus>;
+  availability?: string;
+  cvText?: string | null;
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -87,6 +89,27 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) throw new FriendlyError('Your session ended. Sign in again.');
-  if (!res.ok) throw new Error(`${method} ${path} failed with ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(res.status, body?.error?.code ?? 'unknown', body?.error?.details);
+  }
+  // Saves and deletes answer 204 with no body.
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+// PM decision X-04: deletes the profile, CV and name; anonymised scores stay for the pilot evaluation.
+export async function deleteAccount(): Promise<void> {
+  const user = await userId();
+  if (!user) throw new FriendlyError('Your session ended. Sign in again to delete your account.');
+  if (DEMO_MODE) {
+    try {
+      localStorage.removeItem(key(user.id));
+    } catch {
+      // Nothing stored.
+    }
+  } else {
+    await request('DELETE', '/v1/me');
+  }
+  await supabase?.auth.signOut();
 }

@@ -25,26 +25,6 @@ export function milestones(progress: Progress | null): Milestone[] {
   return items.map((m, i) => ({ ...m, state: done[i] ? 'earned' : i === current ? 'current' : 'locked' }));
 }
 
-// Remembers which milestones this browser has already celebrated, so each one animates exactly once.
-const SEEN_KEY = 'praxis.milestones.seen';
-
-export function takeNewlyEarned(list: Milestone[]): Set<string> {
-  let seen: string[] = [];
-  try {
-    seen = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]');
-  } catch {
-    return new Set();
-  }
-  const earned = list.filter((m) => m.state === 'earned').map((m) => m.id);
-  const fresh = earned.filter((id) => !seen.includes(id));
-  try {
-    localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(new Set([...seen, ...earned]))));
-  } catch {
-    // Private browsing: the milestone simply shows without its first-time animation.
-  }
-  return new Set(fresh);
-}
-
 export function hoursLeft(submittedAt: string | null, now = Date.now()): number | null {
   if (!submittedAt) return null;
   return Math.max(0, Math.ceil((new Date(submittedAt).getTime() + REVIEW_HOURS * 3_600_000 - now) / 3_600_000));

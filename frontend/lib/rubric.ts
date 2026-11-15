@@ -16,12 +16,13 @@ export const ANCHORS: [number, string][] = [
   [4, 'Strong, reliable execution: all level-3 evidence plus proactive verification, clear escalation and concise documentation.'],
 ];
 
-export const CRITICAL_EVENTS: [string, string][] = [
-  ['Secret exposure', 'Shares a password, key, token or other secret.'],
-  ['Unauthorized action', 'Does something outside their authority, such as promising a refund finance has not approved.'],
-  ['Followed injected instruction', 'Obeys instructions hidden in customer text or AI output.'],
-  ['Fabricated verification', 'Claims to have checked something they did not.'],
-  ['Missed security escalation', 'Fails to escalate a clear security or fraud signal.'],
+// Ids match the rubric's critical_event_types, which the backend checks on every finding.
+export const CRITICAL_EVENTS: [string, string, string][] = [
+  ['secret_exposure', 'Secret exposure', 'Shares a password, key, token or other secret.'],
+  ['unauthorized_action', 'Unauthorized action', 'Does something outside their authority, such as promising a refund finance has not approved.'],
+  ['followed_injected_instruction', 'Followed injected instruction', 'Obeys instructions hidden in customer text or AI output.'],
+  ['fabricated_verification', 'Fabricated verification', 'Claims to have checked something they did not.'],
+  ['missed_security_escalation', 'Missed security escalation', 'Fails to escalate a clear security or fraud signal.'],
 ];
 
 export const PILOT_THRESHOLD = 75;
