@@ -4,9 +4,30 @@ import { CheckCircle2, Clock, Hourglass } from 'lucide-react';
 import Textarea from '@/components/ui/Textarea';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { useLearner } from '@/components/LearnerProvider';
-import { friendly, report } from '@/lib/errors';
+import { ApiError, friendly, report } from '@/lib/errors';
 import { ago, hoursLeft, REVIEW_HOURS } from '@/lib/journey';
-import { getBaseline, getScenario, saveAnswers, startBaseline, submitBaseline, type Answers, type Attempt, type Scenario } from '@/lib/baseline';
+import {
+  getBaseline,
+  getFinal,
+  getFinalScenario,
+  getScenario,
+  saveAnswers,
+  startBaseline,
+  startFinal,
+  submitAttempt,
+  submitBaseline,
+  type Answers,
+  type Attempt,
+  type Scenario,
+  type Stage,
+} from '@/lib/baseline';
+import type { ProgramId } from '@/lib/catalog';
+
+// The final task is the baseline's twin, so one form serves both with different calls.
+const API: Record<Stage, { scenario: () => Promise<Scenario>; existing: () => Promise<Attempt | null>; start: (p: ProgramId) => Promise<Attempt>; submit: (id: string, a: Answers) => Promise<Attempt> }> = {
+  baseline: { scenario: getScenario, existing: getBaseline, start: startBaseline, submit: submitBaseline },
+  final: { scenario: getFinalScenario, existing: getFinal, start: () => startFinal(), submit: submitAttempt },
+};
 
 type Field = { label: string; hint?: string; rows: number; required?: boolean };
 
@@ -29,7 +50,8 @@ const fieldFor = (id: string): Field => FIELDS[id] ?? { label: id.replace(/_/g, 
 
 type Save = 'idle' | 'saving' | 'saved' | 'failed';
 
-export default function BaselineForm() {
+export default function BaselineForm({ stage = 'baseline' }: { stage?: Stage }) {
+  const api = API[stage];
   const { learner } = useLearner();
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
@@ -43,14 +65,18 @@ export default function BaselineForm() {
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    Promise.all([getScenario(), getBaseline()])
+    Promise.all([api.scenario(), api.existing()])
       .then(([s, a]) => {
         setScenario(s);
         setAttempt(a);
         setAnswers(a?.answers ?? {});
         if (a?.updated_at && Object.values(a.answers ?? {}).some((v) => v.trim())) setResumedAt(a.updated_at);
       })
-      .catch((e) => setLoadError(friendly(e)));
+      .catch((e) =>
+        setLoadError(
+          e instanceof ApiError && e.code === 'final_locked' ? 'Your final task opens after your review and every course in your plan.' : friendly(e),
+        ),
+      );
     return () => clearTimeout(timer.current);
   }, []);
 
@@ -62,7 +88,7 @@ export default function BaselineForm() {
     setBusy(true);
     setFormError('');
     try {
-      const a = await startBaseline(learner.program);
+      const a = await api.start(learner.program);
       setAttempt(a);
       setAnswers(a.answers ?? {});
     } catch (e) {
@@ -107,7 +133,7 @@ export default function BaselineForm() {
     setBusy(true);
     setFormError('');
     try {
-      setAttempt(await submitBaseline(attempt.id, answers));
+      setAttempt(await api.submit(attempt.id, answers));
     } catch (err) {
       setFormError(friendly(err));
     }
@@ -131,7 +157,11 @@ export default function BaselineForm() {
       <div role="status" className="animate-rise mx-auto max-w-2xl rounded-panel bg-surface p-8 shadow-panel">
         <CheckCircle2 className="h-11 w-11 animate-pop text-brand" aria-hidden />
         <h2 className="mt-4 text-2xl font-bold">Case closed on your side</h2>
-        <p className="mt-2 max-w-prose text-muted">Your answers are locked and with a trained support supervisor. This is the first entry in your training record.</p>
+        <p className="mt-2 max-w-prose text-muted">
+          {stage === 'final'
+            ? 'Your final answers are locked and with a supervisor. They are compared with your baseline to show what improved.'
+            : 'Your answers are locked and with a trained support supervisor. This is the first entry in your training record.'}
+        </p>
         <div className="mt-6 rounded-control bg-page p-4">
           <p className="flex items-center gap-2 font-semibold">
             <Hourglass className="h-4 w-4 text-progress" aria-hidden />
@@ -144,7 +174,10 @@ export default function BaselineForm() {
           )}
         </div>
         <ol className="mt-6 space-y-3 text-sm">
-          {['A reviewer scores your four rubric areas and each skill.', 'Your result shows your strongest area and where to start.', 'Your learning plan lists only the courses you need.'].map((t, i) => (
+          {(stage === 'final'
+            ? ['A reviewer scores the same four rubric areas as your baseline.', 'Your dashboard shows each area before and after training.', 'Your certificate follows the pilot sign-off.']
+            : ['A reviewer scores your four rubric areas and each skill.', 'Your result shows your strongest area and where to start.', 'Your learning plan lists only the courses you need.']
+          ).map((t, i) => (
             <li key={t} className="flex gap-3">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand-ink">{i + 1}</span>
               <span className="pt-0.5">{t}</span>

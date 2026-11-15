@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 # Fingerprint of every path, field, type and status code our Go backend depends on. Wording is left out
 # (descriptions, titles, examples), so rewording a docstring never trips this; changing the contract does.
 WORDING = {"examples", "example", "description", "summary", "title"}
-CONTRACT_SHA256 = "9f3abeda99d6349588fffc1ec97072e17c05928d7b2e6cfcb00ce73194c9fb42"
+CONTRACT_SHA256 = "6ab8f5eabbaaadb45fd1e817d23094ac401775b02f4b88abd07613c22cbbe31b"
 
 
 def _shape(node: Any) -> Any:

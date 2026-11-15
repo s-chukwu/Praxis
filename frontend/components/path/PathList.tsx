@@ -41,7 +41,13 @@ export function pathSteps(learner: Learner, progress: Progress | null): Step[] {
       action: 'Open',
       state: planReady ? 'next' : reviewed ? 'waiting' : 'later',
     },
-    { title: 'Final task', text: 'A new scenario shows what improved.', state: 'later' },
+    {
+      title: 'Final task',
+      text: progress?.final ? 'Started. Your answers are saved.' : 'A new scenario shows what improved.',
+      href: '/path/final',
+      action: progress?.final ? 'Continue' : 'Start',
+      state: progress?.final && progress.final.status !== 'in_progress' ? 'done' : planReady && progress?.plan?.modules.every((m) => m.completed_at) ? 'next' : 'later',
+    },
   ];
 }
 

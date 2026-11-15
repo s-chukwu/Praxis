@@ -86,5 +86,11 @@ func NewRouterWithStore(cfg config.Config, db *store.Store) http.Handler {
 	}
 	registerLearnerRoutes(mux, authn, learners, accounts)
 
+	var courses CourseStore
+	if db != nil {
+		courses = db
+	}
+	registerCourseRoutes(mux, authn, attempts, courses, catalog)
+
 	return cors(cfg.CORSAllowedOrigin, mux)
 }

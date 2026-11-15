@@ -151,6 +151,9 @@ func TestRouter_FrontendRoutesAreRegistered(t *testing.T) {
 		{http.MethodGet, "/v1/review-queue"},
 		{http.MethodGet, "/v1/reviews"},
 		{http.MethodGet, "/v1/admin/users"},
+		{http.MethodPost, "/v1/me/plan/courses/M-ROLE/complete"},
+		{http.MethodGet, "/v1/final/scenario"},
+		{http.MethodPost, "/v1/attempts/final"},
 	}
 	for _, r := range routes {
 		rec := httptest.NewRecorder()

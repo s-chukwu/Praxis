@@ -33,7 +33,7 @@ export default function Dashboard() {
         <NextStep progress={progress} />
       </div>
 
-      {progress?.result && <ResultStory result={progress.result} />}
+      {progress?.result && <ResultStory result={progress.result} after={progress.final_result} />}
       <CaseTrail progress={progress} />
     </div>
   );

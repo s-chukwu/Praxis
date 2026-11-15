@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, model_validator
 
 from praxis_assessment.schemas.common import ContentRef, Frozen, Rating, ScenarioId, SemVer, Slug
 
@@ -23,9 +23,20 @@ OutcomeReason = Literal[
 ]
 
 
+# A score this high says the candidate did something, so it must be backed by their own words.
+QUOTE_REQUIRED_FROM = 2
+
+
 class DimensionRating(Frozen):
     score: Rating
-    evidence: tuple[Quote, ...] = Field(min_length=1, max_length=10)
+    # A 0 or 1 can rest on what the candidate left out, and a missing step has nothing to quote.
+    evidence: tuple[Quote, ...] = Field(default=(), max_length=10)
+
+    @model_validator(mode="after")
+    def _quote_backed(self) -> DimensionRating:
+        if self.score >= QUOTE_REQUIRED_FROM and not self.evidence:
+            raise ValueError(f"a score of {QUOTE_REQUIRED_FROM} or more needs at least one quote from the answers")
+        return self
 
 
 class CriticalFinding(Frozen):

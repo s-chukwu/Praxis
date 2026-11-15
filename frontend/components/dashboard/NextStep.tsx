@@ -33,6 +33,40 @@ export default function NextStep({ progress }: { progress: Progress | null }) {
     if (status === 'in_progress' || status === 'assigned') getBaseline().then(setAttempt).catch(report);
   }, [status]);
 
+  const fin = progress?.final;
+  if (progress?.final_result) {
+    return (
+      <Panel title="Your training is complete">
+        <p className="mt-2 text-white/75">Your final task is reviewed. See how each area changed below. Your certificate follows the pilot sign-off.</p>
+      </Panel>
+    );
+  }
+  if (fin && fin.status !== 'in_progress' && fin.status !== 'assigned') {
+    const left = hoursLeft(fin.submitted_at);
+    return (
+      <Panel title="Your final task is with a reviewer">
+        <p className="mt-2 text-white/75">It is scored on the same rubric as your baseline, so the change is fair to compare.</p>
+        {left !== null && (
+          <p className="mt-4 flex items-center gap-2 font-semibold">
+            <Hourglass className="h-4 w-4 text-progress" aria-hidden />
+            {left > 0 ? `Due within ${left} ${left === 1 ? 'hour' : 'hours'}` : 'Taking a little longer than usual'}
+          </p>
+        )}
+      </Panel>
+    );
+  }
+  const planDone = Boolean(progress?.plan?.modules.length && progress.plan.modules.every((m) => m.completed_at));
+  if (fin || planDone) {
+    return (
+      <Panel title={fin ? 'Finish your final task' : 'Your final task is ready'}>
+        <p className="mt-2 text-white/75">A new case, like your baseline. It shows what your training changed. No timer; your answers save as you type.</p>
+        <ButtonLink href="/path/final" size="lg" className="mt-6 lg:mt-auto">
+          {fin ? 'Continue the final task' : 'Open the final task'}
+        </ButtonLink>
+      </Panel>
+    );
+  }
+
   if (progress?.plan) {
     const mods = progress.plan.modules;
     const index = Math.max(0, mods.findIndex((m) => !m.completed_at));
@@ -42,8 +76,8 @@ export default function NextStep({ progress }: { progress: Progress | null }) {
         <p className="mt-2 text-white/75">
           Course {index + 1} of {mods.length}, chosen from your review. Start here; everything else waits.
         </p>
-        <ButtonLink href="/path/plan" size="lg" className="mt-6 lg:mt-auto">
-          Open my plan
+        <ButtonLink href={next ? `/learn/${next.course_code}` : '/path/plan'} size="lg" className="mt-6 lg:mt-auto">
+          Start the course
         </ButtonLink>
       </Panel>
     );

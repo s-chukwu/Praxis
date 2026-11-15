@@ -1,5 +1,7 @@
 import { Check, ListOrdered } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
+import { ButtonLink } from '@/components/ui/Button';
+import Link from 'next/link';
 import { courseNames, skillNames } from '@/lib/catalog';
 import type { PlanReason, Progress } from '@/lib/baseline';
 
@@ -90,6 +92,9 @@ export default function PlanList({ progress }: { progress: Progress | null }) {
                 </h2>
                 <p className="mt-2 text-xl font-bold leading-snug">{next.title || courseNames[next.course_code] || next.course_code}</p>
                 {why(next) && <p className="mt-1.5 text-white/75">{why(next)}</p>}
+                <ButtonLink href={`/learn/${next.course_code}`} size="lg" className="mt-5">
+                  {next.completed_at ? 'Review this course' : 'Start the course'}
+                </ButtonLink>
               </section>
               {modules.length > 1 && (
                 <ol className="divide-y divide-line rounded-panel bg-surface shadow-panel">
@@ -106,7 +111,13 @@ export default function PlanList({ progress }: { progress: Progress | null }) {
                           {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} aria-label="Done" /> : m.position}
                         </span>
                         <div className="min-w-0">
-                          <p className={`font-semibold ${done ? 'text-ink' : 'text-ink/80'}`}>{m.title || courseNames[m.course_code] || m.course_code}</p>
+                          {done ? (
+                            <Link href={`/learn/${m.course_code}`} className="font-semibold text-ink hover:underline">
+                              {m.title || courseNames[m.course_code] || m.course_code}
+                            </Link>
+                          ) : (
+                            <p className="font-semibold text-ink/80">{m.title || courseNames[m.course_code] || m.course_code}</p>
+                          )}
                           {why(m) && <p className="mt-0.5 text-sm text-muted">{why(m)}</p>}
                         </div>
                       </li>
