@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { FriendlyError, report } from './errors';
+import { ApiError, FriendlyError, report } from './errors';
 import type { ProgramId } from './catalog';
 
 export type SkillStatus = 'suggested' | 'confirmed' | 'rejected' | 'verified';
@@ -87,6 +87,9 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) throw new FriendlyError('Your session ended. Sign in again.');
-  if (!res.ok) throw new Error(`${method} ${path} failed with ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(res.status, body?.error?.code ?? 'unknown', body?.error?.details);
+  }
   return (await res.json()) as T;
 }

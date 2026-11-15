@@ -7,7 +7,7 @@ import { Button, ButtonLink } from '@/components/ui/Button';
 import ScorePicker from '@/components/reviewer/ScorePicker';
 import { programs, skillNames } from '@/lib/catalog';
 import { CRITICAL_EVENTS } from '@/lib/rubric';
-import { friendly } from '@/lib/errors';
+import { ApiError, friendly } from '@/lib/errors';
 import {
   clearDraft,
   finalizeReview,
@@ -40,7 +40,19 @@ const ANSWER_LABELS: Record<string, string> = {
 
 type Dim = { score?: number; evidence: string };
 type Event = { quote: string; policy: string };
-const squash = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+// Same rule as the AI service: forgive spacing and Unicode form, never wording or capital letters.
+const squash = (s: string) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
+
+function submitError(e: unknown) {
+  if (e instanceof ApiError && e.code === 'review_pending') {
+    const issues = (e.details?.evidence_issues as { ref: string; quote: string }[] | undefined) ?? [];
+    if (issues.length) return `The scoring service could not find this quote in the answers: “${issues[0].quote}” (${issues[0].ref}). Copy it exactly, including capital letters.`;
+    return 'A critical event is still pending. Confirm or untick it, then submit again.';
+  }
+  if (e instanceof ApiError && e.code === 'invalid_input') return 'Every skill needs a score before this review can be submitted.';
+  if (e instanceof ApiError && e.code === 'review_taken') return 'Another reviewer has taken this case.';
+  return friendly(e);
+}
 
 export default function ReviewPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
@@ -174,7 +186,7 @@ export default function ReviewPage() {
       clearDraft(review.id);
       setDone(true);
     } catch (e) {
-      setFormError(friendly(e));
+      setFormError(submitError(e));
     }
     setBusy(null);
   };
