@@ -243,7 +243,7 @@ export default function ReviewPage() {
 
       <div className="mx-auto max-w-[1280px] px-5 pt-6">
         <h1 className="text-2xl font-bold tabular-nums">{rc.candidateRef}</h1>
-        <p className="mt-1 text-muted">{programs[rc.program].name} · Baseline task</p>
+        <p className="mt-1 text-muted">{programs[rc.program].name} · {rc.stage === 'final' ? 'Final task' : 'Baseline task'}</p>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
           <section

@@ -32,6 +32,7 @@ export type ReviewCase = {
   attemptId: string;
   candidateRef: string;
   program: 'operator' | 'builder';
+  stage: 'baseline' | 'final';
   answers: Record<string, string>;
   brief: string;
   checks: string[];
@@ -48,7 +49,7 @@ const SAMPLE_QUEUE: QueueItem[] = [
   { attempt_id: 'sample-3', candidate_ref: 'C-27c8e5aa', program: 'builder', stage: 'baseline', status: 'submitted', submitted_at: hoursAgo(3), due_at: hoursAgo(-45), priority: 'normal', mine: false },
 ];
 
-const SAMPLE_CASE: Omit<ReviewCase, 'attemptId' | 'candidateRef' | 'program'> = {
+const SAMPLE_CASE: Omit<ReviewCase, 'attemptId' | 'candidateRef' | 'program' | 'stage'> = {
   brief:
     'You work at fictional electronics shop Inyange Tech. A customer writes: "My MoMo was debited twice for my headphones. Send my money back today." Order IT-3307 shows one completed payment of RWF 35,000. The payment provider log shows a second attempt with status \'failed - reversal pending\'. Reversals and refunds need finance team confirmation.',
   answers: {
@@ -73,7 +74,7 @@ export async function getMyReviews(): Promise<ReviewSummary[]> {
 
 // Opening a case you already hold returns your draft, so this is safe on every page load.
 export async function openReview(item: QueueItem): Promise<{ review: Review; reviewCase: ReviewCase }> {
-  const base = { attemptId: item.attempt_id, candidateRef: item.candidate_ref, program: item.program };
+  const base = { attemptId: item.attempt_id, candidateRef: item.candidate_ref, program: item.program, stage: item.stage };
   if (PREVIEW) {
     const review: Review = { id: `review-${item.attempt_id}`, attempt_id: item.attempt_id, finalized_at: null, weighted_score: null, proposed_outcome: null, created_at: hoursAgo(1), scores: [], findings: [] };
     return { review, reviewCase: { ...base, ...SAMPLE_CASE } };
