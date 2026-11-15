@@ -226,3 +226,19 @@ def test_server_computed_fields_cannot_be_supplied(field: str) -> None:
 def test_artifacts_are_required() -> None:
     with pytest.raises(ValidationError):
         ScoreRequest.model_validate(score_payload(artifacts=[]))
+
+
+def test_a_low_score_can_rest_on_what_is_missing() -> None:
+    # The candidate never said what the records show: there is nothing to quote, and that is the finding.
+    payload = score_payload()
+    payload["dimensions"]["accuracy"] = {"score": 0, "evidence": []}
+    result = run(payload)
+    assert result.evidence_issues == ()
+    assert result.proposed_outcome == "needs_practice"
+
+
+def test_a_high_score_still_needs_a_quote() -> None:
+    payload = score_payload()
+    payload["dimensions"]["accuracy"] = {"score": 3, "evidence": []}
+    with pytest.raises(ValidationError):
+        run(payload)
