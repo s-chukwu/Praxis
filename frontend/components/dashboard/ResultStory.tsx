@@ -5,7 +5,7 @@ import { DIMENSIONS, PILOT_THRESHOLD } from '@/lib/rubric';
 const name = (id: string) => DIMENSIONS.find((d) => d.id === id)?.title ?? id;
 
 // Leads with one strength and one focus area instead of a table of numbers.
-export default function ResultStory({ result }: { result: NonNullable<Progress['result']> }) {
+export default function ResultStory({ result, after }: { result: NonNullable<Progress['result']>; after?: Progress['result'] }) {
   if (result.scores.length === 0) return null;
   const sorted = [...result.scores].sort((a, b) => b.score - a.score);
   const strongest = sorted[0];
@@ -43,6 +43,26 @@ export default function ResultStory({ result }: { result: NonNullable<Progress['
           </div>
         )}
       </div>
+      {after && (
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-sm font-semibold">Before and after training</p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {result.scores.map((b) => {
+              const a = after.scores.find((s) => s.dimension === b.dimension);
+              const change = a ? a.score - b.score : 0;
+              return (
+                <li key={b.dimension} className="flex items-center justify-between rounded-control bg-page px-3 py-2 text-sm">
+                  <span>{name(b.dimension)}</span>
+                  <span className="tabular-nums">
+                    {b.score} → <span className="font-semibold">{a?.score ?? '–'}</span>
+                    {change !== 0 && <span className={`ml-2 text-xs font-semibold ${change > 0 ? 'text-brand-ink' : 'text-danger'}`}>{change > 0 ? `+${change}` : change}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {result.weighted_score !== null && (
         <p className="mt-5 border-t border-line pt-4 text-[13px] text-muted">
           Overall <span className="font-semibold text-ink tabular-nums">{Math.round(result.weighted_score)}</span> of 100. The pilot pass line is {PILOT_THRESHOLD} and
