@@ -11,6 +11,8 @@ export function milestones(progress: Progress | null): Milestone[] {
   const status = progress?.baseline?.status;
   const submitted = Boolean(status && SUBMITTED.has(status));
   const reviewed = Boolean(progress?.result);
+  const modules = progress?.plan?.modules ?? [];
+  const planDone = modules.length > 0 && modules.every((m) => Boolean(m.completed_at));
   const items: Omit<Milestone, 'state'>[] = [
     { id: 'baseline', title: 'Baseline task', detail: 'Answer one real support case', kind: 'step' },
     { id: 'reviewed', title: 'Reviewed', detail: 'A supervisor scores your work', kind: 'badge' },
@@ -18,7 +20,7 @@ export function milestones(progress: Progress | null): Milestone[] {
     { id: 'final', title: 'Final task', detail: 'A new case shows what improved', kind: 'step' },
     { id: 'certificate', title: 'Certificate', detail: 'Eligible for employer review', kind: 'certificate' },
   ];
-  const done = [submitted, reviewed, false, false, false];
+  const done = [submitted, reviewed, planDone, false, false];
   const current = done.indexOf(false);
   return items.map((m, i) => ({ ...m, state: done[i] ? 'earned' : i === current ? 'current' : 'locked' }));
 }
