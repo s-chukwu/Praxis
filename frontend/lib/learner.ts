@@ -15,7 +15,7 @@ export type Learner = {
 };
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
-// Our Go backend has no learner-profile routes yet. Until it does, profile state lives in this browser.
+// With NEXT_PUBLIC_API_MODE=live, profile state comes from the backend. Otherwise it stays in this browser.
 export const DEMO_MODE = process.env.NEXT_PUBLIC_API_MODE !== 'live';
 
 // Dev-only: a sample learner so the screens can be reviewed while sign-up is unavailable.
