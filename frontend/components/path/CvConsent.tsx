@@ -43,7 +43,8 @@ export default function CvConsent({ onDone }: { onDone: () => void | Promise<voi
           if (claimed.has(c)) skills[c] = 'confirmed';
           else delete skills[c];
         }
-        await saveLearner({ cvSubmitted: Boolean(text.trim() && consent), skills });
+        const keepCv = Boolean(text.trim() && consent);
+        await saveLearner({ cvSubmitted: keepCv, skills, ...(keepCv ? { cvText: text.trim() } : {}) });
         await refresh();
       }
       await onDone();

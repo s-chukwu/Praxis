@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardPen, LayoutDashboard, ListOrdered, LogOut, Route, X } from 'lucide-react';
+import { ClipboardPen, LayoutDashboard, ListOrdered, LogOut, Route, UserRound, X } from 'lucide-react';
 import Logo from './Logo';
 import { useLearner } from './LearnerProvider';
 import { programs } from '@/lib/catalog';
@@ -12,6 +12,7 @@ const items = [
   { label: 'My path', href: '/path', icon: Route, exact: true },
   { label: 'Baseline task', href: '/path/baseline', icon: ClipboardPen },
   { label: 'Learning plan', href: '/path/plan', icon: ListOrdered },
+  { label: 'Profile', href: '/profile', icon: UserRound },
 ];
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
