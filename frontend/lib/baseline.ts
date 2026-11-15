@@ -89,10 +89,14 @@ export async function submitBaseline(id: string, answers: Answers): Promise<Atte
 
 export type PlanReason = { code: string; competency?: string | null };
 export type PlanModule = { position: number; course_code: string; title: string; reasons: PlanReason[]; completed_at: string | null };
+type AttemptSummary = { attempt_id: string; status: AttemptStatus; submitted_at: string | null };
+type ResultSummary = { review_id: string; weighted_score: number | null; proposed_outcome: string | null; scores: { dimension: string; score: number }[] };
 export type Progress = {
-  baseline: { attempt_id: string; status: AttemptStatus; submitted_at: string | null } | null;
-  result: { review_id: string; weighted_score: number | null; proposed_outcome: string | null; scores: { dimension: string; score: number }[] } | null;
+  baseline: AttemptSummary | null;
+  result: ResultSummary | null;
   plan: { id: string; modules: PlanModule[] } | null;
+  final?: AttemptSummary | null;
+  final_result?: ResultSummary | null;
 };
 
 export async function getProgress(): Promise<Progress> {
@@ -101,4 +105,53 @@ export async function getProgress(): Promise<Progress> {
     return { baseline: a && { attempt_id: a.id, status: a.status, submitted_at: a.submitted_at }, result: null, plan: null };
   }
   return request<Progress>('GET', '/v1/me/progress');
+}
+
+export type Stage = 'baseline' | 'final';
+
+// Preview keeps course completions in this browser so the plan can be walked end to end.
+const PREVIEW_DONE_KEY = 'praxis.courses.preview';
+
+export async function completeCourse(code: string): Promise<void> {
+  if (PREVIEW) {
+    try {
+      const done: string[] = JSON.parse(localStorage.getItem(PREVIEW_DONE_KEY) ?? '[]');
+      localStorage.setItem(PREVIEW_DONE_KEY, JSON.stringify(Array.from(new Set([...done, code]))));
+    } catch {
+      // Private browsing: nothing to remember.
+    }
+    return;
+  }
+  await request('POST', `/v1/me/plan/courses/${code}/complete`);
+}
+
+export function previewCompleted(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(PREVIEW_DONE_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+// The final task opens only when the plan is done; the backend refuses it otherwise.
+export async function getFinalScenario(): Promise<Scenario> {
+  if (PREVIEW) return { ...PREVIEW_SCENARIO, scenario_id: 'CS-01-B' };
+  return request<Scenario>('GET', '/v1/final/scenario');
+}
+
+export async function getFinal(): Promise<Attempt | null> {
+  if (PREVIEW) return null;
+  const { attempts } = await request<{ attempts: Attempt[] }>('GET', '/v1/attempts');
+  const found = attempts.find((a) => a.stage === 'final' && a.status !== 'voided');
+  return found ? request<Attempt>('GET', `/v1/attempts/${found.id}`) : null;
+}
+
+export async function startFinal(): Promise<Attempt> {
+  if (PREVIEW) return { id: 'preview-final', stage: 'final', status: 'in_progress', answers: {}, submitted_at: null };
+  return request<Attempt>('POST', '/v1/attempts/final');
+}
+
+export async function submitAttempt(id: string, answers: Answers): Promise<Attempt> {
+  if (PREVIEW && id === 'preview-final') return { id, stage: 'final', status: 'submitted', answers, submitted_at: new Date().toISOString() };
+  return submitBaseline(id, answers);
 }
