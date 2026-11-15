@@ -230,6 +230,9 @@ Names only. Values are set in Azure, or in `.env` for local runs.
 | AI | `GEMINI_MODEL` | plain env; pin `gemini-3.5-flash` |
 | Web | `API_INTERNAL_URL` | plain env |
 | Web | `NEXT_PUBLIC_API_URL` | plain env |
+| Web | `NEXT_PUBLIC_API_MODE` | repo variable; set to `live` for the live API |
+
+`NEXT_PUBLIC_*` values are build args baked into the web image by the release workflow.
 
 ## Known constraints
 
