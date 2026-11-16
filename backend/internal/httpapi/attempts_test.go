@@ -21,6 +21,8 @@ const (
 	adminID    = "44444444-4444-4444-4444-444444444444"
 )
 
+const validAnswers = `{"answers":{"customer_reply":"Thank you for writing. I checked the order and the payment log.","internal_note":"Escalated to finance for confirmation.","verification_steps":"Checked the order and the provider log.","ai_interaction":"I removed the refund promise from the AI draft."}}`
+
 // fakeAuth reads the caller from test headers instead of checking a real token.
 type fakeAuth struct{}
 
@@ -229,7 +231,7 @@ func TestReviewersSeeAttemptsOnlyFromSubmission(t *testing.T) {
 func TestCandidateFlowAndLocks(t *testing.T) {
 	h, _ := newTestRouter()
 	id := mustCreate(t, h, candidateA)
-	answers := `{"answers":{"q1":"hello"}}`
+	answers := validAnswers
 
 	expectStatus(t, call(t, h, http.MethodPut, "/v1/attempts/"+id+"/answers", candidateA, "candidate", answers), http.StatusOK, "save answers")
 	expectStatus(t, call(t, h, http.MethodPut, "/v1/attempts/"+id+"/answers", candidateA, "candidate", `{"answers":"text"}`), http.StatusUnprocessableEntity, "answers must be an object")
@@ -257,6 +259,49 @@ func TestCandidateFlowAndLocks(t *testing.T) {
 
 	// Voided is final.
 	expectStatus(t, call(t, h, http.MethodPost, "/v1/attempts/"+id+"/start", candidateA, "candidate", ""), http.StatusConflict, "start after void")
+}
+
+func TestSaveAnswersAcceptsValidAnswers(t *testing.T) {
+	h, _ := newTestRouter()
+	id := mustCreate(t, h, candidateA)
+
+	expectStatus(t, call(t, h, http.MethodPut, "/v1/attempts/"+id+"/answers", candidateA, "candidate", validAnswers), http.StatusOK, "valid answers")
+}
+
+func TestSaveAnswersAcceptsAICorrections(t *testing.T) {
+	h, _ := newTestRouter()
+	id := mustCreate(t, h, candidateA)
+	body := `{"answers":{"customer_reply":"reply","internal_note":"note","ai_corrections":"removed the refund promise","ai_interaction":"used the AI draft"}}`
+
+	expectStatus(t, call(t, h, http.MethodPut, "/v1/attempts/"+id+"/answers", candidateA, "candidate", body), http.StatusOK, "ai_corrections answers")
+}
+
+func TestSaveAnswersValidatesFields(t *testing.T) {
+	h, _ := newTestRouter()
+	id := mustCreate(t, h, candidateA)
+
+	longField := strings.Repeat("a", maxAnswerFieldLength+1)
+	longTotal := strings.Repeat("a", 5100)
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"empty object", `{"answers":{}}`},
+		{"missing customer reply", `{"answers":{"internal_note":"note","verification_steps":"steps","ai_interaction":"ai"}}`},
+		{"blank customer reply", `{"answers":{"customer_reply":"   ","internal_note":"note","verification_steps":"steps","ai_interaction":"ai"}}`},
+		{"missing internal note", `{"answers":{"customer_reply":"reply","verification_steps":"steps","ai_interaction":"ai"}}`},
+		{"missing verification", `{"answers":{"customer_reply":"reply","internal_note":"note","ai_interaction":"ai"}}`},
+		{"missing ai interaction", `{"answers":{"customer_reply":"reply","internal_note":"note","verification_steps":"steps"}}`},
+		{"non-text field", `{"answers":{"customer_reply":5,"internal_note":"note","verification_steps":"steps","ai_interaction":"ai"}}`},
+		{"field too long", fmt.Sprintf(`{"answers":{"customer_reply":%q,"internal_note":"note","verification_steps":"steps","ai_interaction":"ai"}}`, longField)},
+		{"total too long", fmt.Sprintf(`{"answers":{"customer_reply":%q,"internal_note":%q,"verification_steps":%q,"ai_interaction":%q}}`, longTotal, longTotal, longTotal, longTotal)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := call(t, h, http.MethodPut, "/v1/attempts/"+id+"/answers", candidateA, "candidate", tc.body)
+			expectStatus(t, rec, http.StatusUnprocessableEntity, tc.name)
+		})
+	}
 }
 
 func TestAttemptRoutesAnswer503WithoutADatabase(t *testing.T) {

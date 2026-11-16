@@ -41,7 +41,7 @@ const FIELDS: Record<string, Field> = {
     rows: 4,
     required: true,
   },
-  ai_interaction: { label: 'How you used AI (optional)', hint: 'Paste the AI draft and what you changed.', rows: 3 },
+  ai_interaction: { label: 'How you used AI', hint: 'Paste the AI draft and what you changed.', rows: 3, required: true },
 };
 
 const words = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
