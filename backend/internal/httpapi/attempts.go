@@ -1,24 +1,32 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/s-chukwu/Praxis/backend/internal/auth"
 	"github.com/s-chukwu/Praxis/backend/internal/store"
 	"github.com/s-chukwu/Praxis/backend/internal/workflow"
 )
 
-const maxBodyBytes = 256 << 10
+const (
+	maxBodyBytes         = 256 << 10
+	maxAnswerFieldLength = 10000
+	maxAnswersLength     = 20000
+)
 
-var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F-]{36}$`)
+var (
+	uuidPattern          = regexp.MustCompile(`^[0-9a-fA-F-]{36}$`)
+	requiredAnswerFields = []string{"customer_reply", "internal_note", "ai_interaction"}
+)
 
 // AttemptStore is what the attempt routes need from the database layer.
 // *store.Store satisfies it, and tests use a fake.
@@ -304,6 +312,41 @@ type answersRequest struct {
 	Answers json.RawMessage `json:"answers"`
 }
 
+func validateAnswers(raw json.RawMessage) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return errors.New("answers must be a JSON object")
+	}
+
+	values := make(map[string]string, len(fields))
+	total := 0
+	for name, value := range fields {
+		var text string
+		if err := json.Unmarshal(value, &text); err != nil {
+			return fmt.Errorf("%s must be text", name)
+		}
+		length := utf8.RuneCountInString(text)
+		if length > maxAnswerFieldLength {
+			return fmt.Errorf("%s must be %d characters or fewer", name, maxAnswerFieldLength)
+		}
+		total += length
+		values[name] = text
+	}
+	if total > maxAnswersLength {
+		return fmt.Errorf("answers must be %d characters or fewer in total", maxAnswersLength)
+	}
+
+	for _, name := range requiredAnswerFields {
+		if strings.TrimSpace(values[name]) == "" {
+			return fmt.Errorf("%s is required", name)
+		}
+	}
+	if strings.TrimSpace(values["verification_steps"]) == "" && strings.TrimSpace(values["ai_corrections"]) == "" {
+		return errors.New("verification_steps or ai_corrections is required")
+	}
+	return nil
+}
+
 // saveAnswers stores the candidate's answers while the attempt is open.
 func (h *attemptHandlers) saveAnswers(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
@@ -322,8 +365,8 @@ func (h *attemptHandlers) saveAnswers(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &body) {
 		return
 	}
-	if trimmed := bytes.TrimSpace(body.Answers); len(trimmed) == 0 || trimmed[0] != '{' {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_input", "answers must be a JSON object")
+	if err := validateAnswers(body.Answers); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "invalid_input", err.Error())
 		return
 	}
 

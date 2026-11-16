@@ -89,7 +89,7 @@ func newFinalizeTestRouter(scorer Scorer) (http.Handler, *fakeReviews) {
 	return mux, reviews
 }
 
-const goodAnswers = `{"answers":{"customer_reply":"Thank you for writing. I can see one captured payment and one pending entry.","internal_note":"Escalated to billing for confirmation."}}`
+const goodAnswers = `{"answers":{"customer_reply":"Thank you for writing. I can see one captured payment and one pending entry.","internal_note":"Escalated to billing for confirmation.","verification_steps":"Checked the order and the provider log.","ai_interaction":"I removed the refund promise from the AI draft."}}`
 
 // reviewWithScores creates an attempt with the given answers, submits it, starts a
 // review as the reviewer and saves one dimension score. It returns the attempt and review ids.
@@ -233,8 +233,12 @@ func TestCheckCompetencies(t *testing.T) {
 
 func TestFinalizeNeedsScorableAnswers(t *testing.T) {
 	scorer := &fakeScorer{response: scoreResponseJSON("evidence_verified")}
-	h, _ := newFinalizeTestRouter(scorer)
-	_, reviewID := reviewWithScores(t, h, `{"answers":{"customer_reply":5}}`)
+	h, reviews := newFinalizeTestRouter(scorer)
+	attemptID, reviewID := reviewWithScores(t, h, goodAnswers)
+
+	attempt := reviews.attempts.items[attemptID]
+	attempt.Answers = json.RawMessage(`{"customer_reply":5}`)
+	reviews.attempts.items[attemptID] = attempt
 
 	rec := call(t, h, http.MethodPost, "/v1/reviews/"+reviewID+"/finalize", reviewerID, "reviewer", finalizeJSON)
 	expectStatus(t, rec, http.StatusUnprocessableEntity, "answers that are not text")
