@@ -33,7 +33,14 @@ function Frame({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready || isPublic || loadError) return;
-    if (!learner) return router.replace('/login');
+    if (!learner) {
+      if (staff) {
+        if (!isReviewerArea) router.replace('/reviewer');
+      } else {
+        router.replace('/login');
+      }
+      return;
+    }
     // Preview has no real roles, so both areas stay open for demos.
     if (PREVIEW) {
       if (!isReviewerArea && !learner.onboarded && !isOnboarding) router.replace('/onboarding');
@@ -46,7 +53,8 @@ function Frame({ children }: { children: React.ReactNode }) {
 
   if (isPublic) return <>{children}</>;
   if (loadError) return <ErrorScreen message={loadError} onRetry={() => void refresh()} />;
-  if (!ready || !learner) return <div className="min-h-screen bg-page" aria-busy="true" />;
+  if (!ready || (!learner && !staff)) return <div className="min-h-screen bg-page" aria-busy="true" />;
+  if (staff && !isReviewerArea) return <div className="min-h-screen bg-page" aria-busy="true" />;
   // The reviewer workspace has its own focus layout, separate from the learner app.
   // Courses use the same focus mode as the reviewer workspace: no sidebar, one task on screen.
   if (isOnboarding || isReviewerArea || path.startsWith('/learn')) return <>{children}</>;

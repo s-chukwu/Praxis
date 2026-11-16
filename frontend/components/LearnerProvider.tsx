@@ -24,7 +24,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [l, r] = await Promise.all([getLearner(), getRole()]);
+      const r = await getRole();
+      const l = r === 'reviewer' || r === 'admin' ? null : await getLearner();
       setLearner(l);
       setRole(r);
       setLoadError('');
