@@ -8,7 +8,7 @@ The story is simple: a candidate starts with one real support case, a reviewer s
 
 ## Current release state
 
-At the time of writing, `main` is `85359ec`.
+The deployed SHA matches `main`.
 
 - `GET /v1/me/progress` is registered and returns `200` for a candidate.
 - `/debug/panic` is removed and returns `404`.
@@ -40,7 +40,7 @@ Run this 30 minutes before the demo.
 
 - Scale web, backend, and AI to `min-replicas 1`.
 - Run `./scripts/smoke.sh` and confirm it passes.
-- Confirm web, backend, and AI all run the current `main` image. At the time of writing that is `85359ec`.
+- Confirm web, backend, and AI all run the current `main` image.
 - Confirm the backend `AI_SERVICE_URL` is `https://praxis-ai.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io`.
 - Confirm `GET /v1/me/progress` returns 200 for the demo candidate. If it returns 404, use the fallback IDs in the progress route section below.
 - Confirm `/debug/panic` returns 404.
@@ -151,7 +151,7 @@ Say:
 
 > The candidate sees one strength and one place to start, not a wall of scores. The plan lists only the courses the review selected.
 
-This segment requires the progress route to be deployed. It is on `main` at `85359ec`. The plan includes course pages and a final task; show the ordered courses and stop before the final task if time is short.
+This segment requires the progress route to be deployed. It is on `main`. The plan includes course pages and a final task; show the ordered courses and stop before the final task if time is short.
 
 ### 8:30 to 9:00 - Close
 

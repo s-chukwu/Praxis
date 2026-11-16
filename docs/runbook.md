@@ -14,7 +14,7 @@ The AI service uses external ingress. The environment is an express environment,
 
 ## Current release state (15 November 2026)
 
-- `main` is `85359ec`. The Release workflow deployed web, backend, and AI on that SHA.
+- The Release workflow deploys web, backend, and AI from the current `main` commit.
 - `GET /v1/me/progress` is registered and returns `200` for a candidate.
 - `/debug/panic` is removed and returns `404`.
 - The web image is built with `NEXT_PUBLIC_API_MODE=live`, so profile editing, CV replace/delete, and account deletion use the backend.

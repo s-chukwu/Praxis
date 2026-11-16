@@ -3,7 +3,7 @@
 **Prepared by:** Nziza (QA Tester)  
 **Date:** 2 November 2026  
 **Version:** 0.1.0  
-**Last updated:** 15 November 2026
+**Last updated:** 16 November 2026
 
 ## 1. Introduction
 
@@ -37,7 +37,8 @@ A total of 15 test cases have been identified in the test case document.
 | PASS | 5 |
 | FAIL | 0 |
 | BLOCKED | 2 |
-| PENDING INVESTIGATION | 1 |
+| PENDING INVESTIGATION | 0 |
+| NOT APPLICABLE | 1 |
 | NOT TESTED | 7 |
 | **Total** | **15** |
 
@@ -51,7 +52,7 @@ The AI service automated test suite was also run on 15 November 2026. Its result
 |---|---|---|---|
 | TC-001 | Homepage Loading | PASS | Homepage loaded successfully at localhost:3000. |
 | TC-002 | Backend Status Display | PASS | Homepage displayed `Backend: ok`. |
-| TC-003 | Skill Catalog Navigation | PENDING INVESTIGATION | Clicking Skill Catalog displayed a 404 page. Further investigation is required. |
+| TC-003 | Skill Catalog Navigation | NOT APPLICABLE | The current app has no standalone Skill Catalog route. Course details are on the landing page and course pages open from the plan. |
 
 ### 4.2 Backend Testing
 
@@ -120,7 +121,8 @@ python -m pytest -v
 |---|---|---|---|
 | TC-014 | Database Connectivity | BLOCKED | Supabase database connectivity has not yet been confirmed. |
 | TC-015 | Data Integrity | BLOCKED | Requires database connectivity to test saving and retrieving data. |
-| TC-003 | Skill Catalog Navigation | PENDING INVESTIGATION | A 404 page was observed, but the expected implementation needs confirmation. |
+
+TC-003 is not applicable because the current app has no standalone Skill Catalog route. Course details are on the landing page and course pages open from the plan.
 
 ## 6. Tests Not Yet Executed
 
@@ -141,9 +143,9 @@ The following tests still need to be performed:
 ### Observation 1: Skill Catalog Navigation
 
 - **Test ID:** TC-003
-- **Observation:** Clicking Skill Catalog displays a 404 page.
-- **Current Status:** Pending Investigation.
-- **Next Action:** Confirm whether the Skill Catalog page has been implemented and whether the navigation route is correct.
+- **Observation:** Clicking Skill Catalog displayed a 404 page in an earlier build.
+- **Current Status:** Not applicable. The current app has no standalone Skill Catalog route; course details are on the landing page and course pages open from the plan.
+- **Next Action:** None. Use the landing page and plan course links for the course flow.
 
 ### Observation 2: Database Testing
 
@@ -185,8 +187,7 @@ The next testing activities will focus on:
 
 1. Testing individual AI service endpoints.
 2. Testing frontend navigation and user-facing pages.
-3. Investigating the Skill Catalog 404 observation.
-4. Confirming Supabase database connectivity.
-5. Testing data storage and retrieval.
+3. Confirming Supabase database connectivity.
+4. Testing data storage and retrieval.
 
 This report will be updated as additional test cases are executed.
