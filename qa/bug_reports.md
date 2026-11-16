@@ -1,6 +1,7 @@
 # Praxis Bug Reports
 
-**Date:** 15 November 2026  
+**Date:** 15 November 2026
+**Last updated:** 16 November 2026
 **Version:** 0.1.0
 
 ## 1. Introduction
@@ -19,13 +20,13 @@ Status values: Fixed, In progress.
 | BUG-004 | Customer case shows empty | Critical | Fixed |
 | BUG-005 | No start button for the baseline task | High | Fixed |
 | BUG-006 | No landing page | Medium | Fixed |
-| BUG-007 | No profile editing page | Medium | In progress |
+| BUG-007 | No profile editing page | Medium | Fixed |
 | BUG-008 | Weak passwords accepted | Medium | Fixed |
 | BUG-009 | Text file upload not working | Low | Fixed |
 | BUG-010 | Assessment service not connected | Critical | Fixed |
 | BUG-011 | No email verification | High | Fixed |
-| BUG-012 | Reviewed work still shows under review | Critical | In progress |
-| BUG-013 | No delete account option | High | In progress |
+| BUG-012 | Reviewed work still shows under review | Critical | Fixed |
+| BUG-013 | No delete account option | High | Fixed |
 
 ## 3. Bug Details
 
@@ -104,7 +105,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The user can open a profile page and edit their details.
 - **Actual result:** No profile editing page exists.
 - **Severity:** Medium
-- **Status:** In progress
+- **Status:** Fixed
+- **Resolution:** The profile page now supports editing profile fields, replacing or deleting the CV, and deleting the account. See `frontend/app/profile/page.tsx` and `backend/internal/httpapi/learner.go`.
 
 ### BUG-008: Weak passwords accepted
 
@@ -161,7 +163,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The result and the learning plan are shown, and the courses are available.
 - **Actual result:** The profile still says the work is under review and the courses stay locked.
 - **Severity:** Critical
-- **Status:** In progress
+- **Status:** Fixed
+- **Resolution:** `registerProgressRoute` is now registered in `backend/internal/httpapi/router.go`, so the dashboard reads `/v1/me/progress` and no longer leaves reviewed work under review.
 
 ### BUG-013: No delete account option
 
@@ -172,4 +175,5 @@ Status values: Fixed, In progress.
 - **Expected result:** The user can delete their account.
 - **Actual result:** No delete account option exists.
 - **Severity:** High
-- **Status:** In progress
+- **Status:** Fixed
+- **Resolution:** The profile page has a delete-account action. It calls `DELETE /v1/me`, which erases the learner data and closes the sign-in account.
