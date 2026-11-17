@@ -69,21 +69,15 @@ Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_AP
 
 Production runs on Azure Container Apps in `praxis-rg`. A push to `main` runs the Release workflow, which builds and deploys the API, assessment, and web images.
 
-| Service | URL |
-|---|---|
-| Web | https://praxis-web.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
-| API | https://praxis-backend.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
-| Assessment | https://praxis-ai.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io |
+Live web app: https://praxis-web.orangepebble-10f42efc.southafricanorth.azurecontainerapps.io
 
-The assessment service uses external ingress because the current Container Apps environment does not provide internal-only networking. Unsigned `/internal` calls return 401. The HMAC secret is the control.
+The API and assessment service URLs and the deploy, rollback, and scaling steps are in `docs/runbook.md`.
 
 Verify a deployment:
 
 ```bash
 ./scripts/smoke.sh
 ```
-
-Deploy, rollback, and scaling steps are in `docs/runbook.md`.
 
 ## Docs
 
