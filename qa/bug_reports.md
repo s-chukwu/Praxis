@@ -1,32 +1,32 @@
 # Praxis Bug Reports
 
 **Date:** 15 November 2026
-**Last updated:** 16 November 2026
-**Version:** 0.1.0
+**Last updated:** 19 November 2026
+**Version:** 0.2.0
 
 ## 1. Introduction
 
 This document records the bugs found during QA testing of the Praxis application. Bugs were reported by the team during end-to-end testing.
 
-Status values: Fixed, In progress.
+Status values: Open, In progress, Fixed, Verified. Fixed means the developers made the change. Verified means QA retested it and recorded the result in `regression_log.md`. The retest cases for each bug are listed there.
 
 ## 2. Summary
 
 | Bug ID | Title | Severity | Status |
 |---|---|---|---|
-| BUG-001 | Baseline submit not connected | Critical | Fixed |
-| BUG-002 | Refresh deletes all answers | High | Fixed |
-| BUG-003 | No message on empty boxes | Medium | Fixed |
-| BUG-004 | Customer case shows empty | Critical | Fixed |
-| BUG-005 | No start button for the baseline task | High | Fixed |
-| BUG-006 | No landing page | Medium | Fixed |
-| BUG-007 | No profile editing page | Medium | Fixed |
-| BUG-008 | Weak passwords accepted | Medium | Fixed |
-| BUG-009 | Text file upload not working | Low | Fixed |
-| BUG-010 | Assessment service not connected | Critical | Fixed |
-| BUG-011 | No email verification | High | Fixed |
-| BUG-012 | Reviewed work still shows under review | Critical | Fixed |
-| BUG-013 | No delete account option | High | Fixed |
+| BUG-001 | Baseline submit not connected | Critical | Verified |
+| BUG-002 | Refresh deletes all answers | High | Verified |
+| BUG-003 | No message on empty boxes | Medium | Verified |
+| BUG-004 | Customer case shows empty | Critical | Verified |
+| BUG-005 | No start button for the baseline task | High | Verified |
+| BUG-006 | No landing page | Medium | Verified |
+| BUG-007 | No profile editing page | Medium | Verified |
+| BUG-008 | Weak passwords accepted | Medium | Verified |
+| BUG-009 | Text file upload not working | Low | Verified |
+| BUG-010 | Assessment service not connected | Critical | Verified |
+| BUG-011 | No email verification | High | Verified |
+| BUG-012 | Reviewed work still shows under review | Critical | Verified |
+| BUG-013 | No delete account option | High | Verified |
 
 ## 3. Bug Details
 
@@ -40,7 +40,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The answers are submitted and sent to a reviewer.
 - **Actual result:** The submission is not connected, so the candidate cannot finish the task.
 - **Severity:** Critical
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-002: Refresh deletes all answers
 
@@ -52,7 +53,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The answers are saved and shown again after the refresh.
 - **Actual result:** All answers are deleted.
 - **Severity:** High
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-003: No message on empty boxes
 
@@ -64,7 +66,8 @@ Status values: Fixed, In progress.
 - **Expected result:** A message tells the candidate which boxes must be filled in.
 - **Actual result:** No message appears.
 - **Severity:** Medium
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-004: Customer case shows empty
 
@@ -74,7 +77,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The customer case is displayed above the questions.
 - **Actual result:** The customer case is empty.
 - **Severity:** Critical
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-005: No start button for the baseline task
 
@@ -84,7 +88,8 @@ Status values: Fixed, In progress.
 - **Expected result:** A start button opens the task and shows the customer case.
 - **Actual result:** No start button is shown.
 - **Severity:** High
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-006: No landing page
 
@@ -94,7 +99,8 @@ Status values: Fixed, In progress.
 - **Expected result:** A landing page describes the product and links to sign in and sign up.
 - **Actual result:** No landing page is shown.
 - **Severity:** Medium
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-007: No profile editing page
 
@@ -105,7 +111,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The user can open a profile page and edit their details.
 - **Actual result:** No profile editing page exists.
 - **Severity:** Medium
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 - **Resolution:** The profile page now supports editing profile fields, replacing or deleting the CV, and deleting the account. See `frontend/app/profile/page.tsx` and `backend/internal/httpapi/learner.go`.
 
 ### BUG-008: Weak passwords accepted
@@ -118,7 +125,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The form rejects the password and asks for a stronger one.
 - **Actual result:** The account is created.
 - **Severity:** Medium
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-009: Text file upload not working
 
@@ -129,7 +137,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The text from the file is read and shown.
 - **Actual result:** The feature shows coming soon.
 - **Severity:** Low
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-010: Assessment service not connected
 
@@ -139,7 +148,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The assessment service checks the answers.
 - **Actual result:** The assessment service is not connected.
 - **Severity:** Critical
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-011: No email verification
 
@@ -151,7 +161,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The user must confirm the email address before using the account.
 - **Actual result:** The account is accepted without verification.
 - **Severity:** High
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 
 ### BUG-012: Reviewed work still shows under review
 
@@ -163,7 +174,8 @@ Status values: Fixed, In progress.
 - **Expected result:** The result and the learning plan are shown, and the courses are available.
 - **Actual result:** The profile still says the work is under review and the courses stay locked.
 - **Severity:** Critical
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 - **Resolution:** `registerProgressRoute` is now registered in `backend/internal/httpapi/router.go`, so the dashboard reads `/v1/me/progress` and no longer leaves reviewed work under review.
 
 ### BUG-013: No delete account option
@@ -175,5 +187,6 @@ Status values: Fixed, In progress.
 - **Expected result:** The user can delete their account.
 - **Actual result:** No delete account option exists.
 - **Severity:** High
-- **Status:** Fixed
+- **Status:** Verified
+- **Retested:** 19 November 2026 by Nziza (see `regression_log.md`)
 - **Resolution:** The profile page has a delete-account action. It calls `DELETE /v1/me`, which erases the learner data and closes the sign-in account.

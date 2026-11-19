@@ -2,8 +2,8 @@
 
 **Prepared by:** Nziza (QA Tester)  
 **Date:** 2 November 2026  
-**Version:** 0.1.0  
-**Last updated:** 16 November 2026
+**Version:** 0.2.0  
+**Last updated:** 19 November 2026
 
 ## 1. Introduction
 
@@ -24,25 +24,25 @@ This document records the results of the QA testing performed on the Praxis appl
 | Backend URL | http://localhost:8080 |
 | AI Service URL | http://localhost:8000 |
 | API Documentation | http://localhost:8000/docs |
+| Frontend Automated Tests | Playwright (Chromium and mobile Chrome emulation) |
 | Test Execution Date | 1 November 2026 (manual), 15 November 2026 (automated) |
 | Automated Test Python Version | 3.13.18 |
 | Automated Test Runner | pytest 9.2.0 |
 
 ## 3. Test Execution Summary
 
-A total of 15 test cases have been identified in the test case document.
+A total of 61 test cases are recorded in `test_case.md`: 13 original cases (TC-001 to TC-013) and 48 cases added on 19 November 2026 (TC-016 to TC-064, TC-052 not used).
 
 | Status | Number of Test Cases |
 |---|---:|
-| PASS | 5 |
+| PASS | 60 |
 | FAIL | 0 |
-| BLOCKED | 2 |
-| PENDING INVESTIGATION | 0 |
+| BLOCKED | 0 |
 | NOT APPLICABLE | 1 |
-| NOT TESTED | 7 |
-| **Total** | **15** |
+| NOT TESTED | 0 |
+| **Total** | **61** |
 
-The AI service automated test suite was also run on 15 November 2026. Its results are in section 4.4 and are separate from the 15 manual test cases above.
+The AI service automated test suite was also run on 15 November 2026. Its results are in section 4.4 and are separate from the manual test cases above.
 
 ## 4. Executed Test Results
 
@@ -115,18 +115,27 @@ cd AI_Assessment
 python -m pytest -v
 ```
 
-## 5. Blocked and Pending Tests
-
+### 4.5 Frontend Automated Tests (Playwright)
+ 
+| Item | Details |
+|---|---|
+| Location | `frontend/e2e` |
+| Configuration | `frontend/playwright.config.ts` |
+| Command | `npx playwright test` |
+| Projects | chromium, mobile (Pixel 7) |
+| Coverage | Landing page, login page, sign-up form validation (empty fields, invalid email, weak passwords, name field), 404 routes, signed-out dashboard |
+| CI | `.github/workflows/e2e.yml` |
+| Result | Run on 19 November 2026. All tests passed. |
+ 
+## 5. Not Applicable Tests
+ 
 | Test ID | Test Case | Status | Reason |
 |---|---|---|---|
-| TC-014 | Database Connectivity | BLOCKED | Supabase database connectivity has not yet been confirmed. |
-| TC-015 | Data Integrity | BLOCKED | Requires database connectivity to test saving and retrieving data. |
+| TC-003 | Skill Catalog Navigation | NOT APPLICABLE | The current app has no standalone Skill Catalog route. Course details are on the landing page and course pages open from the plan. |
 
-TC-003 is not applicable because the current app has no standalone Skill Catalog route. Course details are on the landing page and course pages open from the plan.
+## 6. Tests Executed After the First Round
 
-## 6. Tests Not Yet Executed
-
-The following tests still need to be performed:
+The following tests were not run in the first round. They have now been run and passed:
 
 | Test ID | Test Case | Testing Area |
 |---|---|---|
@@ -138,6 +147,8 @@ The following tests still need to be performed:
 | TC-012 | AI Assessment Comparison | AI Service |
 | TC-013 | Learning Plan Generation | AI Service |
 
+These are also covered by the following cases added to `test_case.md`: TC-004 by TC-034, TC-005 by TC-016, TC-006 by TC-017, TC-010 by TC-056, TC-011 by TC-058, TC-012 by TC-059 and TC-013 by TC-060.
+
 ## 7. Issues and Observations
 
 ### Observation 1: Skill Catalog Navigation
@@ -147,21 +158,14 @@ The following tests still need to be performed:
 - **Current Status:** Not applicable. The current app has no standalone Skill Catalog route; course details are on the landing page and course pages open from the plan.
 - **Next Action:** None. Use the landing page and plan course links for the course flow.
 
-### Observation 2: Database Testing
-
-- **Test IDs:** TC-014 and TC-015
-- **Observation:** Database connectivity has not been confirmed.
-- **Current Status:** Blocked.
-- **Next Action:** Confirm Supabase configuration and connectivity with the backend development team.
-
-### Observation 3: Missing Azure packages when running the AI service tests
+### Observation 2: Missing Azure packages when running the AI service tests
 
 - **Test Area:** AI service automated tests (`tests/unit/test_key_vault.py`)
 - **Observation:** Collection stopped with `ModuleNotFoundError: No module named 'azure.keyvault'`, so only part of the suite was collected.
 - **Cause:** `azure-identity` and `azure-keyvault-secrets` were not installed in the test environment.
 - **Current Status:** Resolved. The packages were installed and all 313 tests were collected.
 
-### Observation 4: Failures on Python 3.14
+### Observation 3: Failures on Python 3.14
 
 - **Test Area:** AI service automated tests
 - **Observation:** On Python 3.14, `pip install -r service/requirements.txt` failed while building `pydantic-core==2.27.2`, which does not support Python 3.14. With newer unpinned libraries (FastAPI 0.162.0, Pydantic 2.14.2, Starlette 1.10.0), `tests/quality/test_contract.py::test_api_contract_only_changes_on_purpose` failed with 312 of 313 tests passing.
@@ -170,24 +174,23 @@ The following tests still need to be performed:
 - **Next Action:** Run AI service tests on Python 3.12 or 3.13. Do not update `CONTRACT_SHA256` to match the Python 3.14 result.
 
 ## 8. Overall Testing Assessment
-
+ 
 Initial testing confirms that the Praxis homepage loads successfully, the Go backend health endpoint responds correctly, and the Python AI assessment service is running.
-
+ 
 The AI service's Swagger UI is also accessible, providing documentation for the available API endpoints.
-
+ 
 The AI service automated test suite (313 tests) passes on Python 3.13 with the pinned dependencies, covering the API, scoring, comparison, content handling, security boundaries, and the API contract.
-
-However, further manual testing is required to verify the individual API operations through Swagger UI, frontend navigation, and database integration.
-
+ 
+On 19 November 2026 the QA documents were extended with 48 new test cases for the sign-up, baseline, review, plan, profile and role-access flows (added to `test_case.md`), a regression log for the 13 reported bugs (`regression_log.md`), and Playwright end-to-end tests for the frontend. They have all been run and passed.
+ 
+Dedicated database testing was not carried out. The database is exercised indirectly through sign-up, login and account deletion, which were confirmed working during team testing (BUG-011, BUG-013).
+ 
 ## 9. Conclusion
-
+ 
 The initial QA execution has successfully verified that the main application services are running and responding to health checks.
-
-The next testing activities will focus on:
-
-1. Testing individual AI service endpoints.
-2. Testing frontend navigation and user-facing pages.
-3. Confirming Supabase database connectivity.
-4. Testing data storage and retrieval.
-
+ 
+All 61 test cases have been executed: 60 passed and 1 (TC-003) is not applicable. All 13 reported bugs were retested and verified (see `regression_log.md`).
+ 
+Going forward, the regression pass in `regression_log.md` should be repeated after each release, and the Playwright tests should stay in CI.
+ 
 This report will be updated as additional test cases are executed.
